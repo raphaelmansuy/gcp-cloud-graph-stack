@@ -1,0 +1,43 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and update with your values
+
+project_id = "saas-app-001"
+region     = "us-central1"
+environment = "dev"
+app_name   = "gcp-graph-stack"
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# Database VM Configuration
+db_vm_machine_type = "e2-standard-2"
+db_vm_boot_disk_size = 50
+db_port = 5432
+postgresql_version = "16"
+
+# Cloud Run Configuration
+nextjs_service_name  = "nextjs-frontend"
+rust_api_service_name = "rust-api"
+cloud_run_memory = "512Mi"
+cloud_run_cpu = "0.25"
+cloud_run_min_instances = 0
+cloud_run_max_instances = 10
+
+# Container Images (update after building and pushing)
+nextjs_image_url = ""  # Fill after building: gcr.io/PROJECT/nextjs:latest
+rust_api_image_url = ""  # Fill after building: gcr.io/PROJECT/rust-api:latest
+
+# Networking
+enable_direct_vpc_egress = true  # Recommended: use Direct VPC egress instead of VPC connectors
+
+# Backups
+enable_wal_archiving = true
+gcs_backup_bucket = ""  # Create a bucket and set here
+
+# Labels
+labels = {
+  "managed_by" = "terraform"
+  "env"        = "dev"
+  "app"        = "gcp-graph-stack"
+  "team"       = "platform"
+}

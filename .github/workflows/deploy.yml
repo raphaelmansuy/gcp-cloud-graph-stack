@@ -1,0 +1,99 @@
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  ARTIFACT_REGISTRY_REPO: gcp-graph-stack-images
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build Next.js image
+        run: |
+          docker build \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/nextjs:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/nextjs:latest \
+            -f dockerfiles/Dockerfile.nextjs \
+            .
+
+      - name: Push Next.js image
+        run: |
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/nextjs:${{ github.sha }}
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/nextjs:latest
+
+      - name: Build Rust API image
+        run: |
+          docker build \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/rust-api:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/rust-api:latest \
+            -f dockerfiles/Dockerfile.rust \
+            .
+
+      - name: Push Rust API image
+        run: |
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/rust-api:${{ github.sha }}
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/rust-api:latest
+
+      - name: Deploy Next.js to Cloud Run
+        if: github.ref == 'refs/heads/main'
+        run: |
+          gcloud run deploy nextjs-frontend \
+            --image ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/nextjs:${{ github.sha }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --cpu 0.25 \
+            --max-instances 10 \
+            --project ${{ env.PROJECT_ID }}
+
+      - name: Deploy Rust API to Cloud Run
+        if: github.ref == 'refs/heads/main'
+        run: |
+          gcloud run deploy rust-api \
+            --image ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/rust-api:${{ github.sha }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --memory 512Mi \
+            --cpu 0.25 \
+            --max-instances 10 \
+            --project ${{ env.PROJECT_ID }}
+
+      - name: Get Cloud Run URLs
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "Next.js Frontend URL:" && \
+          gcloud run services describe nextjs-frontend --region ${{ env.GCP_REGION }} --platform managed --format='value(status.url)' && \
+          echo "Rust API URL:" && \
+          gcloud run services describe rust-api --region ${{ env.GCP_REGION }} --platform managed --format='value(status.url)'

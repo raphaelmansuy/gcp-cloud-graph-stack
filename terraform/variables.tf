@@ -1,0 +1,135 @@
+variable "project_id" {
+  description = "GCP Project ID"
+  type        = string
+  default     = "saas-app-001"
+}
+
+variable "region" {
+  description = "GCP Region"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "environment" {
+  description = "Environment (dev, staging, prod)"
+  type        = string
+  default     = "dev"
+}
+
+variable "app_name" {
+  description = "Application name"
+  type        = string
+  default     = "gcp-graph-stack"
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "db_vm_machine_type" {
+  description = "Machine type for database VM (use small machine by default for dev; override for prod)"
+  type        = string
+  default     = "e2-small"
+}
+
+variable "db_vm_boot_disk_size" {
+  description = "Boot disk size in GB"
+  type        = number
+  default     = 20
+}
+
+variable "use_spot_vm" {
+  description = "Use Spot (preemptible) VM for the database VM to minimize cost in dev environments"
+  type        = bool
+  default     = true
+}
+
+variable "db_port" {
+  description = "PostgreSQL port"
+  type        = number
+  default     = 5432
+}
+
+variable "nextjs_service_name" {
+  description = "Next.js Cloud Run service name"
+  type        = string
+  default     = "nextjs-frontend"
+}
+
+variable "rust_api_service_name" {
+  description = "Rust API Cloud Run service name"
+  type        = string
+  default     = "rust-api"
+}
+
+variable "cloud_run_memory" {
+  description = "Cloud Run memory (e.g., '512Mi', '1Gi')"
+  type        = string
+  default     = "512Mi"
+}
+
+variable "cloud_run_cpu" {
+  description = "Cloud Run CPU (e.g., '0.25', '1')"
+  type        = string
+  default     = "0.25"
+}
+
+variable "cloud_run_min_instances" {
+  description = "Minimum instances for Cloud Run"
+  type        = number
+  default     = 0
+}
+
+variable "cloud_run_max_instances" {
+  description = "Maximum instances for Cloud Run"
+  type        = number
+  default     = 10
+}
+
+variable "nextjs_image_url" {
+  description = "Next.js image URL in Artifact Registry"
+  type        = string
+  default     = ""
+}
+
+variable "rust_api_image_url" {
+  description = "Rust API image URL in Artifact Registry"
+  type        = string
+  default     = ""
+}
+
+variable "enable_direct_vpc_egress" {
+  description = "Enable Direct VPC egress for Cloud Run (recommended over VPC connectors)"
+  type        = bool
+  default     = true
+}
+
+variable "postgresql_version" {
+  description = "PostgreSQL version"
+  type        = string
+  default     = "16"
+}
+
+variable "enable_wal_archiving" {
+  description = "Enable WAL archiving to Cloud Storage"
+  type        = bool
+  default     = true
+}
+
+variable "gcs_backup_bucket" {
+  description = "GCS bucket for backups and WAL archiving"
+  type        = string
+  default     = ""
+}
+
+variable "labels" {
+  description = "Labels for all resources"
+  type        = map(string)
+  default = {
+    "managed_by" = "terraform"
+    "env"        = "dev"
+    "app"        = "gcp-graph-stack"
+  }
+}

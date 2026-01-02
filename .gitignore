@@ -1,0 +1,79 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+.terraform.lock.hcl
+*.tfplan
+
+# Terraform workspace files
+*.tfstate.d/
+
+# GCP / Google Cloud
+*.pem
+*.key
+
+# Node / Frontend
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+pnpm-lock.yaml
+
+# Docker
+**/docker-compose.override.yml
+docker-compose.override.yml
+**/.docker
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Misc
+coverage/
+.vagrant/
+*.local
+
+# Local VS Code history
+.history/
+
+# Terraform Plan outputs
+tfplan
+
+auto_generated_by_copilot

@@ -1,0 +1,166 @@
+terraform {
+  required_version = ">= 1.5"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.0"
+    }
+  }
+
+  # Uncomment to use remote state (recommended for production)
+  # backend "gcs" {
+  #   bucket = "YOUR_TERRAFORM_STATE_BUCKET"
+  #   prefix = "gcp-graph-stack"
+  # }
+}
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+# Enable required APIs
+resource "google_project_service" "required_apis" {
+  for_each = toset([
+    "compute.googleapis.com",
+    "run.googleapis.com",
+    "artifactregistry.googleapis.com",
+    "vpcaccess.googleapis.com",
+    "secretmanager.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "iam.googleapis.com",
+  ])
+
+  service            = each.value
+  disable_on_destroy = false
+}
+
+# VPC Module
+module "vpc" {
+  source = "./modules/vpc"
+
+  project_id           = var.project_id
+  region               = var.region
+  app_name             = var.app_name
+  vpc_cidr             = var.vpc_cidr
+  enable_direct_egress = var.enable_direct_vpc_egress
+  labels               = var.labels
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Compute Engine VM Module (Database)
+module "compute" {
+  source = "./modules/compute"
+
+  project_id           = var.project_id
+  region               = var.region
+  app_name             = var.app_name
+  machine_type         = var.db_vm_machine_type
+  boot_disk_size       = var.db_vm_boot_disk_size
+  vpc_network_name     = module.vpc.vpc_name
+  vpc_subnet_name      = module.vpc.subnet_name
+  db_port              = var.db_port
+  postgresql_version   = var.postgresql_version
+  enable_wal_archiving = var.enable_wal_archiving
+  gcs_backup_bucket    = var.gcs_backup_bucket
+  labels               = var.labels
+  use_spot_vm          = var.use_spot_vm
+
+  depends_on = [
+    google_project_service.required_apis,
+    module.vpc,
+  ]
+}
+
+# Artifact Registry Repository
+resource "google_artifact_registry_repository" "app_images" {
+  location      = var.region
+  repository_id = "${var.app_name}-images"
+  description   = "Container images for ${var.app_name}"
+  format        = "DOCKER"
+
+  labels = var.labels
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Cloud Run Module (Next.js)
+module "cloud_run_nextjs" {
+  source = "./modules/cloud_run"
+
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = var.nextjs_service_name
+  image_url             = var.nextjs_image_url != "" ? var.nextjs_image_url : "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/nextjs:latest"
+  memory                = var.cloud_run_memory
+  cpu                   = var.cloud_run_cpu
+  min_instances         = var.cloud_run_min_instances
+  max_instances         = var.cloud_run_max_instances
+  vpc_network_name      = module.vpc.vpc_name
+  vpc_subnet_name       = module.vpc.subnet_name
+  enable_direct_egress  = var.enable_direct_vpc_egress
+  vpc_connector_name    = !var.enable_direct_vpc_egress ? module.vpc.vpc_connector_name : null
+  allow_unauthenticated = true
+  labels                = var.labels
+
+  environment_variables = {
+    "NODE_ENV" = var.environment
+    "API_URL"  = "http://${module.cloud_run_rust_api.service_uri}"
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    module.vpc,
+  ]
+}
+
+# Cloud Run Module (Rust API)
+module "cloud_run_rust_api" {
+  source = "./modules/cloud_run"
+
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = var.rust_api_service_name
+  image_url             = var.rust_api_image_url != "" ? var.rust_api_image_url : "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/rust-api:latest"
+  memory                = var.cloud_run_memory
+  cpu                   = var.cloud_run_cpu
+  min_instances         = var.cloud_run_min_instances
+  max_instances         = var.cloud_run_max_instances
+  vpc_network_name      = module.vpc.vpc_name
+  vpc_subnet_name       = module.vpc.subnet_name
+  enable_direct_egress  = var.enable_direct_vpc_egress
+  vpc_connector_name    = !var.enable_direct_vpc_egress ? module.vpc.vpc_connector_name : null
+  allow_unauthenticated = false
+  labels                = var.labels
+
+  environment_variables = {
+    "DATABASE_HOST" = module.compute.vm_private_ip
+    "DATABASE_PORT" = tostring(var.db_port)
+    "DATABASE_NAME" = "graph_db"
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    module.vpc,
+    module.compute,
+  ]
+}
+
+# Service Account for Cloud Run (least privilege)
+resource "google_service_account" "cloud_run_sa" {
+  account_id   = "${var.app_name}-cloud-run"
+  display_name = "Cloud Run service account for ${var.app_name}"
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Grant secret accessor permission
+resource "google_project_iam_member" "secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [google_service_account.cloud_run_sa]
+}

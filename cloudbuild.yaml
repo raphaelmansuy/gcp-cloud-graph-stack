@@ -1,0 +1,81 @@
+steps:
+  # Build Next.js container
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-nextjs'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/nextjs:${SHORT_SHA}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/nextjs:latest'
+      - '-f'
+      - 'dockerfiles/Dockerfile.nextjs'
+      - '.'
+
+  # Push Next.js image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-nextjs'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/nextjs:${SHORT_SHA}'
+    waitFor: ['build-nextjs']
+
+  # Build Rust API container
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-rust-api'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/rust-api:${SHORT_SHA}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/rust-api:latest'
+      - '-f'
+      - 'dockerfiles/Dockerfile.rust'
+      - '.'
+
+  # Push Rust API image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-rust-api'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/rust-api:${SHORT_SHA}'
+    waitFor: ['build-rust-api']
+
+  # Deploy Next.js to Cloud Run
+  - name: 'gcr.io/cloud-builders/gke-deploy'
+    id: 'deploy-nextjs'
+    args:
+      - run
+      - --filename=k8s/
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/nextjs:${SHORT_SHA}
+      - --location=${_REGION}
+    waitFor: ['push-nextjs']
+
+  # Deploy Rust API to Cloud Run
+  - name: 'gcr.io/cloud-builders/gke-deploy'
+    id: 'deploy-rust-api'
+    args:
+      - run
+      - --filename=k8s/
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/rust-api:${SHORT_SHA}
+      - --location=${_REGION}
+    waitFor: ['push-rust-api']
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/nextjs:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/nextjs:latest'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/rust-api:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/rust-api:latest'
+
+substitutions:
+  _REGION: 'us-central1'
+  _REPO: 'gcp-graph-stack-images'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'N1_HIGHCPU_8'
+
+timeout: '3600s'
+
+onFailure:
+  - LOG

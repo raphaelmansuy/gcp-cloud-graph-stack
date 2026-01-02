@@ -164,3 +164,63 @@ resource "google_project_iam_member" "secret_accessor" {
 
   depends_on = [google_service_account.cloud_run_sa]
 }
+
+# ----------------------
+# Logging optimizations
+# ----------------------
+# Create a short-retention log bucket for non-prod (reduces storage costs)
+resource "google_logging_project_bucket_config" "dev_logs" {
+  count         = var.environment == "dev" ? 1 : 0
+  project       = var.project_id
+  bucket_id     = "dev-logs"
+  location      = var.region
+  retention_days = var.log_retention_days_dev
+  description   = "Low-retention bucket for development logs to reduce Cloud Logging storage costs"
+}
+
+# Conservative exclusions: drop DEBUG logs for noisy resources (Cloud Run, GCE, Cloud Build)
+# These run only when enabled and help cut noisy debug logs from ingestion
+resource "google_logging_project_exclusion" "exclude_cloud_run_debug" {
+  count       = var.enable_log_exclusions ? 1 : 0
+  project     = var.project_id
+  name        = "exclude_cloud_run_debug"
+  description = "Exclude DEBUG logs from Cloud Run to reduce noise and cost"
+  filter      = "resource.type=\"cloud_run_revision\" AND severity=DEBUG"
+}
+
+resource "google_logging_project_exclusion" "exclude_gce_debug" {
+  count       = var.enable_log_exclusions ? 1 : 0
+  project     = var.project_id
+  name        = "exclude_gce_debug"
+  description = "Exclude DEBUG logs from GCE instances"
+  filter      = "resource.type=\"gce_instance\" AND severity=DEBUG"
+}
+
+resource "google_logging_project_exclusion" "exclude_cloud_build_debug" {
+  count       = var.enable_log_exclusions ? 1 : 0
+  project     = var.project_id
+  name        = "exclude_cloud_build_debug"
+  description = "Exclude DEBUG logs from Cloud Build"
+  filter      = "resource.type=\"build\" AND severity=DEBUG"
+}
+
+# Optional: Exclude Cloud Monitoring metrics/logs that are informational only (commented example)
+# resource "google_logging_project_exclusion" "exclude_monitoring_info" {
+#   project     = var.project_id
+#   name        = "exclude_monitoring_info"
+#   description = "Example to exclude informational monitoring logs"
+#   filter      = "resource.type=\"cloud_monitoring\" AND severity=INFO"
+# }
+
+# Output a short summary to make it easy to confirm logging resources
+output "logging_summary" {
+  value = {
+    dev_logs_bucket       = google_logging_project_bucket_config.dev_logs[0].id
+    exclude_cloud_run     = google_logging_project_exclusion.exclude_cloud_run_debug[0].name
+    exclude_gce           = google_logging_project_exclusion.exclude_gce_debug[0].name
+    exclude_cloud_build   = google_logging_project_exclusion.exclude_cloud_build_debug[0].name
+  }
+  description = "Summary of logging resources created (dev-only)"
+  depends_on  = [google_project_service.required_apis]
+  sensitive    = false
+}

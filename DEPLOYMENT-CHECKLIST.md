@@ -340,9 +340,13 @@ Use this checklist to ensure every step is completed before moving to the next p
   - [ ] Logs are being collected
   - [ ] No error messages
 
-- [ ] Set up log retention (30 days):
+- [ ] Set up log retention (30 days for prod; 7 days for dev):
+  - [ ] Use a short retention bucket for dev to reduce storage costs (example: 7 days)
+  - [ ] Configure conservative log exclusions (exclude DEBUG for Cloud Run / GCE / Cloud Build)
   ```bash
+  # List sinks and exclusions
   gcloud logging sinks list
+  gcloud logging exclusions list
   ```
 
 ### Cloud Monitoring

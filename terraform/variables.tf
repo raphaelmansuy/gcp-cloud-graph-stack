@@ -133,3 +133,23 @@ variable "labels" {
     "app"        = "gcp-graph-stack"
   }
 }
+
+# Logging / cost-minimization variables
+variable "enable_log_exclusions" {
+  description = "Enable conservative log exclusions to reduce logging volume (recommended for dev)
+  - Excludes DEBUG logs for Cloud Run, Compute, and Cloud Build to cut noise and cost"
+  type    = bool
+  default = true
+}
+
+variable "log_retention_days_dev" {
+  description = "Retention days for dev logs (lower keeps costs down)"
+  type        = number
+  default     = 7
+}
+
+variable "log_retention_days_prod" {
+  description = "Retention days for prod logs (increase as needed)"
+  type        = number
+  default     = 30
+}

@@ -30,9 +30,9 @@ rust_api_image_url = ""  # Fill after building: gcr.io/PROJECT/rust-api:latest
 # Networking
 enable_direct_vpc_egress = true  # Recommended: use Direct VPC egress instead of VPC connectors
 
-# Backups
-enable_wal_archiving = true
-gcs_backup_bucket = ""  # Create a bucket and set here
+# Backups (WAL archiving to GCS)
+enable_wal_archiving = false  # Set to true for production backups; requires gcs_backup_bucket
+gcs_backup_bucket = ""  # Optional: Create a GCS bucket and set here if enable_wal_archiving = true
 
 # Data disk configuration
 create_data_disk = true

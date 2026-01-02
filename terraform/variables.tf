@@ -113,9 +113,9 @@ variable "postgresql_version" {
 }
 
 variable "enable_wal_archiving" {
-  description = "Enable WAL archiving to Cloud Storage"
+  description = "Enable WAL archiving to Cloud Storage (recommended for production; set to true and provide gcs_backup_bucket)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "gcs_backup_bucket" {

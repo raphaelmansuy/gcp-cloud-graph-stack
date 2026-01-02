@@ -19,7 +19,7 @@ variable "environment" {
 variable "app_name" {
   description = "Application name"
   type        = string
-  default     = "gcp-graph-stack"
+  default     = "edgequake"
 }
 
 variable "vpc_cidr" {
@@ -130,7 +130,7 @@ variable "labels" {
   default = {
     "managed_by" = "terraform"
     "env"        = "dev"
-    "app"        = "gcp-graph-stack"
+    "app"        = "edgequake"
   }
 }
 

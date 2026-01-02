@@ -4,7 +4,7 @@
 project_id = "saas-app-001"
 region     = "us-central1"
 environment = "dev"
-app_name   = "gcp-graph-stack"
+app_name   = "edgequake"
 
 # VPC Configuration
 vpc_cidr = "10.0.0.0/16"
@@ -38,6 +38,6 @@ gcs_backup_bucket = ""  # Create a bucket and set here
 labels = {
   "managed_by" = "terraform"
   "env"        = "dev"
-  "app"        = "gcp-graph-stack"
+  "app"        = "edgequake"
   "team"       = "platform"
 }

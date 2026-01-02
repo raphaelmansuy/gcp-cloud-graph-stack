@@ -113,19 +113,19 @@ refresh:
 docker-build:
 	@echo "Building Docker images..."
 	@echo "Building Next.js image..."
-	docker build -t ${REGISTRY}/gcp-graph-stack-images/nextjs:latest \
+	docker build -t ${REGISTRY}/edgequake-images/nextjs:latest \
 		-f dockerfiles/Dockerfile.nextjs .
 	@echo "✓ Next.js image built"
 	@echo ""
 	@echo "Building Rust API image..."
-	docker build -t ${REGISTRY}/gcp-graph-stack-images/rust-api:latest \
+	docker build -t ${REGISTRY}/edgequake-images/rust-api:latest \
 		-f dockerfiles/Dockerfile.rust .
 	@echo "✓ Rust API image built"
 
 docker-push: docker-auth
 	@echo "Pushing Docker images to Artifact Registry..."
-	docker push ${REGISTRY}/gcp-graph-stack-images/nextjs:latest
-	docker push ${REGISTRY}/gcp-graph-stack-images/rust-api:latest
+	docker push ${REGISTRY}/edgequake-images/nextjs:latest
+	docker push ${REGISTRY}/edgequake-images/rust-api:latest
 	@echo "✓ Images pushed successfully"
 
 docker-auth:
@@ -134,8 +134,8 @@ docker-auth:
 
 docker-clean:
 	@echo "Removing local Docker images..."
-	docker rmi ${REGISTRY}/gcp-graph-stack-images/nextjs:latest || true
-	docker rmi ${REGISTRY}/gcp-graph-stack-images/rust-api:latest || true
+	docker rmi ${REGISTRY}/edgequake-images/nextjs:latest || true
+	docker rmi ${REGISTRY}/edgequake-images/rust-api:latest || true
 	@echo "✓ Docker images removed"
 
 # Verification & Testing
@@ -143,7 +143,7 @@ verify-infra:
 	@echo "Verifying infrastructure..."
 	@echo ""
 	@echo "=== Compute Engine VM ==="
-	gcloud compute instances describe gcp-graph-stack-db-vm \
+	gcloud compute instances describe edgequake-db-vm \
 		--zone=${REGION}-a --format='table(status,machineType.machine_type(),networkInterfaces[0].networkIP)'
 	@echo ""
 	@echo "=== Cloud Run Services ==="
@@ -151,13 +151,13 @@ verify-infra:
 		--format='table(SERVICE_NAME,STATUS,REGION,URL)'
 	@echo ""
 	@echo "=== Artifact Registry ==="
-	gcloud artifacts docker images list ${REGISTRY}/gcp-graph-stack-images \
+	gcloud artifacts docker images list ${REGISTRY}/edgequake-images \
 		--format='table(IMAGE,DIGEST,CREATE_TIME)'
 
 verify-db:
 	@echo "Verifying PostgreSQL installation..."
 	@echo "Connecting to VM and checking PostgreSQL status..."
-	gcloud compute ssh gcp-graph-stack-db-vm --zone=${REGION}-a \
+	gcloud compute ssh edgequake-db-vm --zone=${REGION}-a \
 		--command="sudo systemctl status postgresql && sudo -u postgres psql -c 'SELECT version();'"
 
 verify-services:
@@ -192,12 +192,12 @@ logs-cloud-run:
 
 logs-vm:
 	@echo "Showing VM startup script logs..."
-	gcloud compute instances get-serial-port-output gcp-graph-stack-db-vm \
+	gcloud compute instances get-serial-port-output edgequake-db-vm \
 		--zone=${REGION}-a | tail -100
 
 ssh:
 	@echo "Connecting to PostgreSQL VM..."
-	gcloud compute ssh gcp-graph-stack-db-vm --zone=${REGION}-a
+	gcloud compute ssh edgequake-db-vm --zone=${REGION}-a
 
 costs:
 	@echo "Estimated monthly costs for saas-app-001:"

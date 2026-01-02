@@ -11,7 +11,7 @@ terraform {
   # Uncomment to use remote state (recommended for production)
   # backend "gcs" {
   #   bucket = "YOUR_TERRAFORM_STATE_BUCKET"
-  #   prefix = "gcp-graph-stack"
+  #   prefix = "edgequake"
   # }
 }
 
@@ -204,6 +204,14 @@ resource "google_logging_project_exclusion" "exclude_cloud_build_debug" {
   filter      = "resource.type=\"build\" AND severity=DEBUG"
 }
 
+resource "google_logging_project_exclusion" "exclude_health_checks" {
+  count       = var.enable_log_exclusions ? 1 : 0
+  project     = var.project_id
+  name        = "exclude_health_checks"
+  description = "Exclude health check probe logs (load balancer / http health endpoints) to reduce noise"
+  filter      = "(resource.type=\"http_load_balancer\" AND (httpRequest.requestUrl:(\"/health\" OR \"/healthz\") OR jsonPayload.request.path:(\"/health\" OR \"/healthz\"))) OR (jsonPayload.methodName: \"compute.healthChecks\")"
+}
+
 # Optional: Exclude Cloud Monitoring metrics/logs that are informational only (commented example)
 # resource "google_logging_project_exclusion" "exclude_monitoring_info" {
 #   project     = var.project_id
@@ -219,6 +227,7 @@ output "logging_summary" {
     exclude_cloud_run     = try(google_logging_project_exclusion.exclude_cloud_run_debug[0].name, "")
     exclude_gce           = try(google_logging_project_exclusion.exclude_gce_debug[0].name, "")
     exclude_cloud_build   = try(google_logging_project_exclusion.exclude_cloud_build_debug[0].name, "")
+    exclude_health_checks = try(google_logging_project_exclusion.exclude_health_checks[0].name, "")
   }
   description = "Summary of logging resources created (dev-only)"
   depends_on  = [google_project_service.required_apis]

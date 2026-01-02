@@ -71,15 +71,15 @@ Use this checklist to ensure every step is completed before moving to the next p
 
 ### Infrastructure Verification
 - [ ] List compute instances: `gcloud compute instances list`
-  - [ ] gcp-graph-stack-db-vm should be RUNNING
+  - [ ] edgequake-db-vm should be RUNNING
 - [ ] List Cloud Run services: `gcloud run services list --region=us-central1`
   - [ ] nextjs-frontend should exist
   - [ ] rust-api should exist
 - [ ] Check Artifact Registry: `gcloud artifacts repositories list --location=us-central1`
-  - [ ] gcp-graph-stack-images repository should exist
+  - [ ] edgequake-images repository should exist
 - [ ] Verify VPC: `gcloud compute networks list`
-  - [ ] gcp-graph-stack-vpc should exist
-- [ ] Verify firewall rules: `gcloud compute firewall-rules list --filter="network:gcp-graph-stack-vpc"`
+  - [ ] edgequake-vpc should exist
+- [ ] Verify firewall rules: `gcloud compute firewall-rules list --filter="network:edgequake-vpc"`
   - [ ] Rules for Cloud Run → PostgreSQL should exist
   - [ ] SSH access rule should exist
 
@@ -88,7 +88,7 @@ Use this checklist to ensure every step is completed before moving to the next p
 ## Phase 3: PostgreSQL Verification (Day 2)
 
 ### SSH into VM
-- [ ] SSH into VM: `gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a`
+- [ ] SSH into VM: `gcloud compute ssh edgequake-db-vm --zone=us-central1-a`
 - [ ] VM is responsive and connection successful
 
 ### PostgreSQL Service
@@ -158,19 +158,19 @@ Use this checklist to ensure every step is completed before moving to the next p
 - [ ] Verify auth: `cat ~/.docker/config.json | grep us-central1-docker.pkg.dev`
 
 #### Tag and Push Next.js
-- [ ] Tag image: `docker tag nextjs:test us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest`
-- [ ] Push to registry: `docker push us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest`
+- [ ] Tag image: `docker tag nextjs:test us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest`
+- [ ] Push to registry: `docker push us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest`
   - [ ] Push completes without errors
   - [ ] Image appears in Artifact Registry
-- [ ] Verify: `gcloud artifacts docker images list us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images`
+- [ ] Verify: `gcloud artifacts docker images list us-central1-docker.pkg.dev/saas-app-001/edgequake-images`
   - [ ] nextjs:latest is listed
 
 #### Tag and Push Rust API
-- [ ] Tag image: `docker tag rust-api:test us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/rust-api:latest`
-- [ ] Push to registry: `docker push us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/rust-api:latest`
+- [ ] Tag image: `docker tag rust-api:test us-central1-docker.pkg.dev/saas-app-001/edgequake-images/rust-api:latest`
+- [ ] Push to registry: `docker push us-central1-docker.pkg.dev/saas-app-001/edgequake-images/rust-api:latest`
   - [ ] Push completes without errors
   - [ ] Image appears in Artifact Registry
-- [ ] Verify: `gcloud artifacts docker images list us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images`
+- [ ] Verify: `gcloud artifacts docker images list us-central1-docker.pkg.dev/saas-app-001/edgequake-images`
   - [ ] rust-api:latest is listed
 
 ---
@@ -179,8 +179,8 @@ Use this checklist to ensure every step is completed before moving to the next p
 
 ### Update Terraform Variables
 - [ ] Edit `terraform/terraform.tfvars`:
-  - [ ] `nextjs_image = "us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest"`
-  - [ ] `rust_api_image = "us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/rust-api:latest"`
+  - [ ] `nextjs_image = "us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest"`
+  - [ ] `rust_api_image = "us-central1-docker.pkg.dev/saas-app-001/edgequake-images/rust-api:latest"`
 - [ ] Verify no other changes needed
 
 ### Terraform Reapply
@@ -252,7 +252,7 @@ Use this checklist to ensure every step is completed before moving to the next p
 ### Test Database Connectivity
 - [ ] SSH into VM and run queries:
   ```bash
-  gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a
+  gcloud compute ssh edgequake-db-vm --zone=us-central1-a
   sudo -u postgres psql -d graph_db
   ```
 
@@ -316,7 +316,7 @@ Use this checklist to ensure every step is completed before moving to the next p
 - [ ] Create Cloud Build trigger
 - [ ] Configure substitutions:
   - [ ] `_REGION` = us-central1
-  - [ ] `_REPO` = gcp-graph-stack-images
+  - [ ] `_REPO` = edgequake-images
 - [ ] Test trigger:
   - [ ] Manually trigger build
   - [ ] Monitor build progress
@@ -383,7 +383,7 @@ Use this checklist to ensure every step is completed before moving to the next p
 ### Manual Backup Test
 - [ ] Create manual backup:
   ```bash
-  gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a
+  gcloud compute ssh edgequake-db-vm --zone=us-central1-a
   sudo -u postgres pg_basebackup -D /tmp/backup -Ft -z
   sudo tar czf backup.tar.gz /tmp/backup
   gsutil cp backup.tar.gz gs://saas-app-001-db-backups/manual/
@@ -423,7 +423,7 @@ Use this checklist to ensure every step is completed before moving to the next p
 ### Container Image Security
 - [ ] Enable image scanning:
   ```bash
-  gcloud artifacts repositories update gcp-graph-stack-images \
+  gcloud artifacts repositories update edgequake-images \\
     --location=us-central1 \
     --enable-analysis=true
   ```

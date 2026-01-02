@@ -159,17 +159,17 @@ After infrastructure is created, build and push container images:
 docker build -t nextjs:latest -f dockerfiles/Dockerfile.nextjs .
 
 docker tag nextjs:latest \
-  us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest
+  us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest
 
 docker push \
-  us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest
+  us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest
 ```
 
 Then update Terraform:
 
 ```bash
 terraform apply \
-  -var='nextjs_image_url=us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest'
+  -var='nextjs_image_url=us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest'
 ```
 
 ### Rust API
@@ -178,17 +178,17 @@ terraform apply \
 docker build -t rust-api:latest -f dockerfiles/Dockerfile.rust .
 
 docker tag rust-api:latest \
-  us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/rust-api:latest
+  us-central1-docker.pkg.dev/saas-app-001/edgequake-images/rust-api:latest
 
 docker push \
-  us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/rust-api:latest
+  us-central1-docker.pkg.dev/saas-app-001/edgequake-images/rust-api:latest
 ```
 
 Update Terraform:
 
 ```bash
 terraform apply \
-  -var='rust_api_image_url=us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/rust-api:latest'
+  -var='rust_api_image_url=us-central1-docker.pkg.dev/saas-app-001/edgequake-images/rust-api:latest'
 ```
 
 ## Database Setup
@@ -196,7 +196,7 @@ terraform apply \
 SSH into the VM to verify PostgreSQL and extensions:
 
 ```bash
-gcloud compute ssh gcp-graph-stack-db-vm --region=us-central1
+gcloud compute ssh edgequake-db-vm --region=us-central1
 
 # Inside VM:
 sudo -u postgres psql -d graph_db
@@ -231,7 +231,7 @@ gsutil mb -l us-central1 gs://saas-app-001-db-backups
 
 # Allow VM service account to write to bucket:
 gsutil iam ch \
-  serviceAccount:gcp-graph-stack-vm@saas-app-001.iam.gserviceaccount.com:roles/storage.objectCreator \
+  serviceAccount:edgequake-vm@saas-app-001.iam.gserviceaccount.com:roles/storage.objectCreator \\
   gs://saas-app-001-db-backups
 ```
 

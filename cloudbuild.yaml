@@ -69,7 +69,7 @@ images:
 
 substitutions:
   _REGION: 'us-central1'
-  _REPO: 'gcp-graph-stack-images'
+  _REPO: 'edgequake-images'
 
 options:
   logging: CLOUD_LOGGING_ONLY

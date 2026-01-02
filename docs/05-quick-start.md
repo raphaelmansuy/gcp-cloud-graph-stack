@@ -99,14 +99,14 @@ terraform output > outputs.txt
 terraform output
 
 # Check VM is running
-gcloud compute instances describe gcp-graph-stack-db-vm \
+gcloud compute instances describe edgequake-db-vm \
   --zone=us-central1-a
 
 # Verify Cloud Run services exist
 gcloud run services list --region=us-central1
 
 # Check Artifact Registry
-gcloud artifacts repositories describe gcp-graph-stack-images \
+gcloud artifacts repositories describe edgequake-images \
   --location=us-central1
 ```
 
@@ -114,7 +114,7 @@ gcloud artifacts repositories describe gcp-graph-stack-images \
 
 ```bash
 # SSH into VM
-gcloud compute ssh gcp-graph-stack-db-vm \
+gcloud compute ssh edgequake-db-vm \
   --zone=us-central1-a \
   --tunnel-through-iap
 
@@ -148,21 +148,21 @@ REGISTRY=${REGION}-docker.pkg.dev/${PROJECT_ID}
 gcloud auth configure-docker ${REGION}-docker.pkg.dev
 
 # Build Next.js image
-docker build -t ${REGISTRY}/gcp-graph-stack-images/nextjs:latest \
+docker build -t ${REGISTRY}/edgequake-images/nextjs:latest \
   -f dockerfiles/Dockerfile.nextjs .
 
 # Push Next.js image
-docker push ${REGISTRY}/gcp-graph-stack-images/nextjs:latest
+docker push ${REGISTRY}/edgequake-images/nextjs:latest
 
 # Build Rust API image
-docker build -t ${REGISTRY}/gcp-graph-stack-images/rust-api:latest \
+docker build -t ${REGISTRY}/edgequake-images/rust-api:latest \
   -f dockerfiles/Dockerfile.rust .
 
 # Push Rust API image
-docker push ${REGISTRY}/gcp-graph-stack-images/rust-api:latest
+docker push ${REGISTRY}/edgequake-images/rust-api:latest
 
 # Verify images exist
-gcloud artifacts docker images list ${REGISTRY}/gcp-graph-stack-images
+gcloud artifacts docker images list ${REGISTRY}/edgequake-images
 ```
 
 **Note**: If you don't have Next.js/Rust source code yet, create minimal example projects:
@@ -186,8 +186,8 @@ cargo add axum tokio
 ```bash
 # Update terraform variables with image URLs
 # Edit terraform/terraform.tfvars:
-# nextjs_image = "us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest"
-# rust_api_image = "us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/rust-api:latest"
+# nextjs_image = "us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest"
+# rust_api_image = "us-central1-docker.pkg.dev/saas-app-001/edgequake-images/rust-api:latest"
 
 # Reapply Terraform to update Cloud Run services
 terraform apply
@@ -300,7 +300,7 @@ curl ${RUST_API_URL}/health
 
 ```bash
 # SSH into VM
-gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a
+gcloud compute ssh edgequake-db-vm --zone=us-central1-a
 
 # Test query with AGE
 sudo -u postgres psql -d graph_db <<EOF
@@ -333,7 +333,7 @@ gsutil rm -r gs://saas-app-001-tf-state
 gsutil rm -r gs://saas-app-001-db-backups
 
 # Delete Artifact Registry
-gcloud artifacts repositories delete gcp-graph-stack-images \
+gcloud artifacts repositories delete edgequake-images \\
   --location=us-central1
 
 # Disable APIs (optional)
@@ -363,7 +363,7 @@ gcloud auth application-default print-access-token
 
 ```bash
 # Check logs on VM
-gcloud compute instances get-serial-port-output gcp-graph-stack-db-vm \
+gcloud compute instances get-serial-port-output edgequake-db-vm \\
   --zone=us-central1-a
 
 # SSH and check systemd logs
@@ -396,7 +396,7 @@ gcloud artifacts repositories describe gcp-graph-stack-images \
   --location=us-central1
 
 # Verify image exists locally
-docker images | grep gcp-graph-stack
+docker images | grep edgequake
 ```
 
 ## Next Steps

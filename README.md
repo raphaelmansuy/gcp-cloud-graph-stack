@@ -129,9 +129,9 @@ terraform plan -out=tfplan
 terraform apply tfplan
 
 # 5. Build and push Docker images
-docker build -t us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest \
+docker build -t us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest \
   -f dockerfiles/Dockerfile.nextjs .
-docker push us-central1-docker.pkg.dev/saas-app-001/gcp-graph-stack-images/nextjs:latest
+  docker push us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest
 # (repeat for Rust image)
 
 # 6. Deploy to Cloud Run
@@ -151,7 +151,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 # gcloud logging buckets list --project=$PROJECT_ID
 
 # SSH into PostgreSQL VM
-gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a
+gcloud compute ssh edgequake-db-vm --zone=us-central1-a
 
 # Check Cloud Run service status
 gcloud run services describe nextjs-frontend --region=us-central1
@@ -179,7 +179,7 @@ gcloud run services describe nextjs-frontend --region=us-central1
 gcloud logging read "resource.type=cloud_run_revision" --limit=50
 
 # SSH and check VM
-gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a
+gcloud compute ssh edgequake-db-vm --zone=us-central1-a
 sudo journalctl -u google-startup-scripts.service -f
 ```
 
@@ -356,7 +356,7 @@ Security:
 
 2. **Test connectivity**:
    ```bash
-   gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a
+   gcloud compute ssh edgequake-db-vm --zone=us-central1-a
    sudo systemctl status postgresql
    ```
 
@@ -401,7 +401,7 @@ Have suggestions to improve this setup?
 
 1. Create an issue describing the problem
 2. Submit a pull request with improvements
-3. Share feedback: feedback@gcp-graph-stack.dev
+3. Share feedback: feedback@edgequake.dev
 
 ---
 

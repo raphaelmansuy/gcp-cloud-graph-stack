@@ -156,7 +156,7 @@ All parameters are centralized in one place for easy updates:
 project_id = "saas-app-001"
 region      = "us-central1"
 environment = "dev"
-app_name    = "gcp-graph-stack"
+app_name    = "edgequake"
 
 vpc_cidr                    = "10.0.0.0/16"
 db_vm_machine_type          = "e2-standard-2"

@@ -12,7 +12,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: us-central1
-  ARTIFACT_REGISTRY_REPO: gcp-graph-stack-images
+  ARTIFACT_REGISTRY_REPO: edgequake-images
 
 jobs:
   build-and-deploy:

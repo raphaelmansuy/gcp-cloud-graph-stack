@@ -300,7 +300,7 @@ jobs:
 
 **Solution**:
 1. Verify service account has `roles/artifactregistry.writer`
-2. Ensure Artifact Registry repository exists: `gcloud artifacts repositories create gcp-graph-stack-images --location=us-central1 --repository-format=docker`
+2. Ensure Artifact Registry repository exists: `gcloud artifacts repositories create edgequake-images --location=us-central1 --repository-format=docker`
 3. Check Docker authentication: `gcloud auth configure-docker us-central1-docker.pkg.dev`
 
 ## References

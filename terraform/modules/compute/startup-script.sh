@@ -22,6 +22,54 @@ apt-get install -y \
   gnupg2 \
   lsb-release
 
+# If a data disk is present, format/mount and migrate Postgres data into it
+DATA_DISK_BY_ID="/dev/disk/by-id/google-${data_disk_name}"
+MOUNT_POINT="${data_disk_mount_point}"
+
+if [ "${create_data_disk}" = "true" ] || [ -b "$DATA_DISK_BY_ID" ]; then
+  if [ -b "$DATA_DISK_BY_ID" ]; then
+    echo "Found data disk at $DATA_DISK_BY_ID"
+    # Format if necessary
+    if ! blkid "$DATA_DISK_BY_ID" >/dev/null 2>&1; then
+      echo "Formatting data disk..."
+      mkfs.ext4 -F "$DATA_DISK_BY_ID"
+    fi
+
+    mkdir -p "$MOUNT_POINT"
+    if ! mountpoint -q "$MOUNT_POINT"; then
+      mount "$DATA_DISK_BY_ID" "$MOUNT_POINT"
+    fi
+
+    chown -R postgres:postgres "$MOUNT_POINT"
+
+    PG_DATA_DIR="/var/lib/postgresql/${postgresql_version}/main"
+
+    # If PG_DATA_DIR exists and the mount is empty, move data into disk and symlink
+    if [ -d "$PG_DATA_DIR" ] && [ -z "$(ls -A "$MOUNT_POINT")" ]; then
+      echo "Migrating existing PostgreSQL data to $MOUNT_POINT"
+      systemctl stop postgresql || true
+      mv "$PG_DATA_DIR" "$MOUNT_POINT/"
+      ln -s "$MOUNT_POINT/main" "$PG_DATA_DIR"
+      chown -R postgres:postgres "$MOUNT_POINT"
+    fi
+
+    # If mount already contains DB data but PG_DATA_DIR missing, create symlink
+    if [ ! -d "$PG_DATA_DIR" ] && [ -d "$MOUNT_POINT/main" ]; then
+      ln -s "$MOUNT_POINT/main" "$PG_DATA_DIR"
+      chown -R postgres:postgres "$MOUNT_POINT"
+    fi
+
+    # Ensure persistent mount in fstab
+    if ! grep -q "$DATA_DISK_BY_ID" /etc/fstab; then
+      echo "$DATA_DISK_BY_ID $MOUNT_POINT ext4 defaults 0 2" >> /etc/fstab
+    fi
+  else
+    echo "create_data_disk is true but device $DATA_DISK_BY_ID not present yet; continuing"
+  fi
+else
+  echo "No separate data disk configured. Using boot disk for DB data."
+fi
+
 # Start PostgreSQL
 systemctl start postgresql
 systemctl enable postgresql

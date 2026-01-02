@@ -34,6 +34,19 @@ enable_direct_vpc_egress = true  # Recommended: use Direct VPC egress instead of
 enable_wal_archiving = true
 gcs_backup_bucket = ""  # Create a bucket and set here
 
+# Data disk configuration
+create_data_disk = true
+# Protect the data disk from accidental deletion
+data_disk_prevent_destroy = true
+# Data disk size (GB)
+data_disk_size = 50
+# Data disk type (pd-standard, pd-ssd, pd-balanced)
+data_disk_type = "pd-standard"
+# Snapshot schedule and retention
+enable_snapshot_schedule = true
+snapshot_retention_days = 3
+snapshot_start_time = "04:00"
+
 # Labels
 labels = {
   "managed_by" = "terraform"

@@ -46,6 +46,72 @@ variable "labels" {
   type = map(string)
 }
 
+variable "create_data_disk" {
+  description = "Create a separate persistent data disk for the database VM"
+  type        = bool
+  default     = true
+}
+
+variable "existing_data_disk_self_link" {
+  description = "If you manage the disk outside Terraform, provide the disk self_link to attach"
+  type        = string
+  default     = ""
+}
+
+variable "data_disk_size" {
+  description = "Size of the data disk in GB"
+  type        = number
+  default     = 50
+}
+
+variable "data_disk_type" {
+  description = "PD disk type (pd-standard, pd-ssd, pd-balanced)"
+  type        = string
+  default     = "pd-standard"
+}
+
+variable "data_disk_prevent_destroy" {
+  description = "If true, Terraform will prevent accidental deletion of the data disk (recommended: true)"
+  type        = bool
+  default     = true
+}
+
+variable "data_disk_device_name" {
+  description = "Device name for the attached data disk (used in fstab/mounts)"
+  type        = string
+  default     = "data-disk"
+}
+
+variable "data_disk_mount_point" {
+  description = "Local mount point for the data disk"
+  type        = string
+  default     = "/mnt/data"
+}
+
+variable "enable_snapshot_schedule" {
+  description = "Enable daily snapshot schedule for the data disk"
+  type        = bool
+  default     = true
+}
+
+variable "snapshot_retention_days" {
+  description = "Maximum number of days to retain snapshots"
+  type        = number
+  default     = 3
+}
+
+variable "snapshot_start_time" {
+  description = "UTC start time for the daily snapshot (allowed: 00:00,04:00,08:00,12:00,16:00,20:00)"
+  type        = string
+  default     = "04:00"
+}
+
+variable "snapshot_storage_locations" {
+  description = "Optional list of storage locations for snapshots (regional names)"
+  type        = list(string)
+  default     = []
+}
+
 variable "use_spot_vm" {
   description = "Whether to use a Spot (preemptible) VM for the database VM"
   type        = bool
@@ -73,6 +139,74 @@ resource "google_storage_bucket_iam_member" "vm_gcs_access" {
   member = "serviceAccount:${google_service_account.vm_sa.email}"
 }
 
+# Data disk (persistent, detached from instance lifecycle)
+# Two resource variants: one with `prevent_destroy = true` and one without.
+resource "google_compute_disk" "data_disk" {
+  count = var.create_data_disk && !var.data_disk_prevent_destroy ? 1 : 0
+
+  name  = "${var.app_name}-data-disk"
+  size  = var.data_disk_size
+  type  = var.data_disk_type
+  zone  = "${var.region}-a"
+
+  labels = var.labels
+}
+
+resource "google_compute_disk" "data_disk_protected" {
+  count = var.create_data_disk && var.data_disk_prevent_destroy ? 1 : 0
+
+  name  = "${var.app_name}-data-disk"
+  size  = var.data_disk_size
+  type  = var.data_disk_type
+  zone  = "${var.region}-a"
+
+  labels = var.labels
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# ResourcePolicy: daily snapshot schedule (keep a small number of daily restores)
+resource "google_compute_resource_policy" "daily_snap" {
+  count  = var.enable_snapshot_schedule ? 1 : 0
+  name   = "${var.app_name}-daily-snap-policy"
+  region = var.region
+
+  snapshot_schedule_policy {
+    schedule {
+      daily_schedule {
+        days_in_cycle = 1
+        start_time    = var.snapshot_start_time
+      }
+    }
+
+    retention_policy {
+      max_retention_days    = var.snapshot_retention_days
+      on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
+    }
+
+    snapshot_properties {
+      guest_flush = true
+      storage_locations = var.snapshot_storage_locations
+      labels = var.labels
+    }
+  }
+}
+
+locals {
+  data_disk_self_link = (var.create_data_disk && var.data_disk_prevent_destroy) ? try(google_compute_disk.data_disk_protected[0].self_link, null) : (var.create_data_disk ? try(google_compute_disk.data_disk[0].self_link, null) : (var.existing_data_disk_self_link != "" ? var.existing_data_disk_self_link : null))
+}
+
+# Attach the snapshot schedule policy to the created disk via the attachment resource
+resource "google_compute_disk_resource_policy_attachment" "data_disk_attachment" {
+  count = var.create_data_disk && var.enable_snapshot_schedule ? 1 : 0
+
+  name = google_compute_resource_policy.daily_snap[0].name
+  disk = var.data_disk_prevent_destroy ? google_compute_disk.data_disk_protected[0].name : google_compute_disk.data_disk[0].name
+  zone = "${var.region}-a"
+}
+
 # Compute Instance - Database VM
 resource "google_compute_instance" "db_vm" {
   name         = "${var.app_name}-db-vm"
@@ -84,6 +218,16 @@ resource "google_compute_instance" "db_vm" {
       image = "ubuntu-2204-lts"
       size  = var.boot_disk_size
       type  = "pd-standard"
+    }
+  }
+
+  # Attach persistent data disk when available; auto_delete=false ensures the disk
+  # survives instance replacement and can be reattached to a new instance.
+  dynamic "attached_disk" {
+    for_each = local.data_disk_self_link != null ? [local.data_disk_self_link] : []
+    content {
+      source      = attached_disk.value
+      device_name = var.data_disk_device_name
     }
   }
 
@@ -116,10 +260,16 @@ resource "google_compute_instance" "db_vm" {
 
   # Startup script: install PostgreSQL, AGE, pgvector
   metadata_startup_script = base64encode(templatefile("${path.module}/startup-script.sh", {
-    postgresql_version = var.postgresql_version
-    db_port            = var.db_port
-    gcs_backup_bucket  = var.gcs_backup_bucket
+    postgresql_version   = var.postgresql_version
+    db_port              = var.db_port
+    gcs_backup_bucket    = var.gcs_backup_bucket
     enable_wal_archiving = var.enable_wal_archiving
+
+    # Data disk info for startup script
+    data_disk_name       = "${var.app_name}-data-disk"
+    data_disk_mount_point = var.data_disk_mount_point
+    data_disk_device_name = var.data_disk_device_name
+    create_data_disk      = var.create_data_disk
   }))
 
   depends_on = [google_service_account.vm_sa]
@@ -143,4 +293,24 @@ output "vm_external_ip" {
 
 output "service_account_email" {
   value = google_service_account.vm_sa.email
+}
+
+output "data_disk_name" {
+  value = var.create_data_disk ? (var.data_disk_prevent_destroy ? try(google_compute_disk.data_disk_protected[0].name, "") : try(google_compute_disk.data_disk[0].name, "")) : (var.existing_data_disk_self_link != "" ? var.existing_data_disk_self_link : "")
+}
+
+output "data_disk_self_link" {
+  value = local.data_disk_self_link
+}
+
+output "snapshot_policy_name" {
+  value = var.enable_snapshot_schedule && length(google_compute_resource_policy.daily_snap) > 0 ? google_compute_resource_policy.daily_snap[0].name : ""
+}
+
+output "snapshot_policy_self_link" {
+  value = var.enable_snapshot_schedule && length(google_compute_resource_policy.daily_snap) > 0 ? try(google_compute_resource_policy.daily_snap[0].self_link, "") : ""
+}
+
+output "snapshot_attachment" {
+  value = var.create_data_disk && var.enable_snapshot_schedule ? try(google_compute_disk_resource_policy_attachment.data_disk_attachment[0].id, "") : ""
 }

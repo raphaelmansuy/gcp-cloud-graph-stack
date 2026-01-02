@@ -123,6 +123,14 @@ cd terraform
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your settings
 
+# Recommended: use `make init` from the repository root to bootstrap the remote backend
+# and initialize Terraform. `make init` will create a GCS bucket named `${PROJECT_ID}-tf-state`
+# (if it doesn't exist), enable versioning, and run `terraform init` with the backend configured.
+# This avoids local state and keeps state centralized for teams.
+# Example (from repo root):
+#   make init
+
+
 # 4. Deploy infrastructure
 terraform init
 terraform plan -out=tfplan

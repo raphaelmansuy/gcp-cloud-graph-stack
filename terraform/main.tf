@@ -215,10 +215,10 @@ resource "google_logging_project_exclusion" "exclude_cloud_build_debug" {
 # Output a short summary to make it easy to confirm logging resources
 output "logging_summary" {
   value = {
-    dev_logs_bucket       = google_logging_project_bucket_config.dev_logs[0].id
-    exclude_cloud_run     = google_logging_project_exclusion.exclude_cloud_run_debug[0].name
-    exclude_gce           = google_logging_project_exclusion.exclude_gce_debug[0].name
-    exclude_cloud_build   = google_logging_project_exclusion.exclude_cloud_build_debug[0].name
+    dev_logs_bucket       = try(google_logging_project_bucket_config.dev_logs[0].id, "")
+    exclude_cloud_run     = try(google_logging_project_exclusion.exclude_cloud_run_debug[0].name, "")
+    exclude_gce           = try(google_logging_project_exclusion.exclude_gce_debug[0].name, "")
+    exclude_cloud_build   = try(google_logging_project_exclusion.exclude_cloud_build_debug[0].name, "")
   }
   description = "Summary of logging resources created (dev-only)"
   depends_on  = [google_project_service.required_apis]

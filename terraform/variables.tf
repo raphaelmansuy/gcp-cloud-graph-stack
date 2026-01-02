@@ -136,8 +136,7 @@ variable "labels" {
 
 # Logging / cost-minimization variables
 variable "enable_log_exclusions" {
-  description = "Enable conservative log exclusions to reduce logging volume (recommended for dev)
-  - Excludes DEBUG logs for Cloud Run, Compute, and Cloud Build to cut noise and cost"
+  description = "Enable conservative log exclusions to reduce logging volume (recommended for dev). Excludes DEBUG logs for Cloud Run, Compute, and Cloud Build."
   type    = bool
   default = true
 }

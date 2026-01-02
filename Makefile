@@ -68,8 +68,9 @@ setup:
 	@echo "✓ GCP authentication configured"
 
 init:
-	@echo "Initializing Terraform..."
-	cd ${TF_DIR} && terraform init
+	@echo "Initializing Terraform (bootstrapping backend if needed)..."
+	@./scripts/bootstrap-backend.sh ${PROJECT_ID} ${REGION}
+	@cd ${TF_DIR} && terraform init -backend-config="bucket=${PROJECT_ID}-tf-state" -backend-config="prefix=terraform/state" -reconfigure -input=false
 
 config:
 	@echo "Creating terraform.tfvars from template..."

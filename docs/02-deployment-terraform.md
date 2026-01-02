@@ -29,9 +29,16 @@ This guide explains how to deploy the `gcp-cloud-graph-stack` infrastructure usi
 
 ### 1. Initialize Terraform
 
+We store Terraform state remotely in a GCS bucket by default. Run `make init` which will bootstrap the backend bucket (`${PROJECT_ID}-tf-state`) and run `terraform init` with the proper backend configuration. If you prefer to configure the backend manually, create the bucket and enable versioning (see below), then run `terraform init -backend-config="bucket=${PROJECT_ID}-tf-state" -backend-config="prefix=terraform/state"`.
+
 ```bash
-cd terraform/
-terraform init
+# Recommended (auto-bootstrap + init)
+make init
+
+# Or manual (create bucket first, then init)
+# gsutil mb -p ${PROJECT_ID} -l ${REGION} gs://${PROJECT_ID}-tf-state
+# gsutil versioning set on gs://${PROJECT_ID}-tf-state
+# cd terraform && terraform init -backend-config="bucket=${PROJECT_ID}-tf-state" -backend-config="prefix=terraform/state"
 ```
 
 Expected output:

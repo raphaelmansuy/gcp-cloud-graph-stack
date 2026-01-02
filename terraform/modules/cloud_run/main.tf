@@ -61,6 +61,12 @@ variable "environment_variables" {
   default = {}
 }
 
+variable "service_account_name" {
+  description = "Email of the service account to run the Cloud Run service as. If empty, defaults to project id (legacy)."
+  type        = string
+  default     = ""
+}
+
 # Cloud Run Service
 resource "google_cloud_run_service" "service" {
   name     = var.service_name
@@ -93,7 +99,8 @@ resource "google_cloud_run_service" "service" {
         }
       }
 
-      service_account_name = var.project_id
+      # Use explicitly provided service account when available, otherwise keep legacy behavior
+      service_account_name = var.service_account_name != "" ? var.service_account_name : var.project_id
 
       timeout_seconds = 300
     }

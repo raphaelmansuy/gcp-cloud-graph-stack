@@ -109,6 +109,7 @@ module "cloud_run_nextjs" {
     "NODE_ENV" = var.environment
     "API_URL"  = "http://${module.cloud_run_rust_api.service_uri}"
   }
+  service_account_name = google_service_account.cloud_run_sa.email
 
   depends_on = [
     google_project_service.required_apis,
@@ -140,6 +141,7 @@ module "cloud_run_rust_api" {
     "DATABASE_PORT" = tostring(var.db_port)
     "DATABASE_NAME" = "graph_db"
   }
+  service_account_name = google_service_account.cloud_run_sa.email
 
   depends_on = [
     google_project_service.required_apis,

@@ -99,7 +99,11 @@ resource "google_compute_instance" "db_vm" {
 
   service_account {
     email  = google_service_account.vm_sa.email
-    scopes = ["cloud-platform"]
+    # Use narrow OAuth scopes where necessary; prefer IAM roles over broad cloud-platform scope.
+    scopes = [
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/devstorage.read_write"
+    ]
   }
 
   tags = ["postgresql", "allow-ssh"]

@@ -145,6 +145,11 @@ terraform apply  # Updates Cloud Run services with new images
 gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=nextjs-frontend" \
   --limit=20 --format=json
 
+# Note: For cost control we exclude DEBUG logs by default in dev and use short retention (7 days).
+# Check current exclusions and retention:
+# gcloud logging exclusions list
+# gcloud logging buckets list --project=$PROJECT_ID
+
 # SSH into PostgreSQL VM
 gcloud compute ssh gcp-graph-stack-db-vm --zone=us-central1-a
 

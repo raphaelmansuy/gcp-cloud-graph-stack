@@ -120,6 +120,15 @@ Use this checklist to ensure every step is completed before moving to the next p
 - [ ] Check archive command: `sudo -u postgres psql -d graph_db -c "SHOW archive_command;"`
   - [ ] Should contain `gs://saas-app-001-db-backups`
 
+### Data disk & snapshots (DISK PROTECTION)
+- [ ] Confirm the data disk is present and protected (prevent_destroy = true by default)
+  - [ ] `gcloud compute disks list --filter="name~'edgequake-data-disk'" --zones=${REGION}-a`
+- [ ] Verify snapshot schedule policy exists and retention is correct
+  - [ ] `gcloud compute resource-policies list --regions=${REGION}`
+  - [ ] `gcloud compute resource-policies describe edgequake-daily-snap-policy --region=${REGION}`
+- [ ] Confirm recent snapshots exist: `gcloud compute snapshots list --filter='name~"edgequake.*"' --sort-by=~creationTimestamp`
+- [ ] Read ops doc: `docs/07-db-disk-ops.md` for restore & reattach instructions
+
 ### Exit VM
 - [ ] Exit SSH: `exit`
 

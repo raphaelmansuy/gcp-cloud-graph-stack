@@ -74,6 +74,9 @@ coverage/
 .history/
 
 # Terraform Plan outputs
-tfplan
+*.tfplan
+# Any terraform plan output files (e.g., tfplan-edgequake)
+tfplan*
+terraform/tfplan*
 
 auto_generated_by_copilot

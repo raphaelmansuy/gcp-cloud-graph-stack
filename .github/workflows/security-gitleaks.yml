@@ -1,0 +1,29 @@
+name: Security - Gitleaks
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  gitleaks:
+    name: Gitleaks (secret scanning)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run gitleaks Docker
+        uses: docker://zricethezav/gitleaks:8.19.0
+        with:
+          entrypoint: ["gitleaks"]
+          args: ["detect", "--source", "/github/workspace", "--report-format", "json", "--report-path", "/github/workspace/gitleaks-report.json", "--exit-code", "1"]
+
+      - name: Upload gitleaks report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json

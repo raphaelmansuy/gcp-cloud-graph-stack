@@ -110,6 +110,7 @@ Add the following secrets to your GitHub repository settings:
 GCP_PROJECT_ID=saas-app-001
 GCP_WORKLOAD_IDENTITY_PROVIDER=projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
 GCP_SERVICE_ACCOUNT=github-actions-deployer@saas-app-001.iam.gserviceaccount.com
+GITLEAKS_SKIP=false  # Optional: set to true to skip gitleaks in emergencies
 ```
 
 To get PROJECT_NUMBER:

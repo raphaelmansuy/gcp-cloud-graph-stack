@@ -302,10 +302,20 @@ Use this checklist to ensure every step is completed before moving to the next p
   - [ ] `GCP_REGION`
   - [ ] `GCP_WORKLOAD_IDENTITY_PROVIDER`
   - [ ] `GCP_SERVICE_ACCOUNT`
+  - [ ] `GITLEAKS_SKIP` (optional, for emergency skips)
 - [ ] Test workflow by pushing to feature branch
   - [ ] GitHub Actions triggers
   - [ ] Build and push steps complete
   - [ ] No errors in logs
+- [ ] Security jobs configured:
+  - [ ] `gitleaks` runs on PRs and uploads report
+  - [ ] CodeQL analysis enabled (optional)
+- [ ] Configure branch protection for `main`:
+  - [ ] Require at least 1 approving review
+  - [ ] Require status checks (`gitleaks`, `build`) before merge
+  - [ ] Block force pushes and prevent deletion (already set)
+  - [ ] Enforce for admins (optional)
+
 - [ ] Push to main branch
   - [ ] Full workflow (build, push, deploy) executes
   - [ ] Cloud Run services are updated
@@ -435,8 +445,11 @@ Use this checklist to ensure every step is completed before moving to the next p
   - [ ] Database credentials
   - [ ] API keys
   - [ ] Service credentials
-- [ ] Grant Cloud Run access to secrets
+- [ ] Use per-secret IAM bindings (`google_secret_manager_secret_iam_member`) instead of a single project-level grant
+- [ ] Grant Cloud Run access to only the secrets it needs (least privilege)
+- [ ] Configure secret rotation and versioning
 - [ ] Verify secrets are not in code
+
 
 ---
 

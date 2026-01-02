@@ -100,6 +100,15 @@ gcloud run services list --region=us-central1
 gcloud artifacts repositories list --location=us-central1
 ```
 
+## Security & Best Practices
+
+- Cloud Run uses a dedicated service account created by Terraform: `edgequake-cloud-run@${var.project_id}.iam.gserviceaccount.com`. Terraform passes this SA explicitly to Cloud Run via `service_account_name` to enforce least privilege.
+  - Grant `roles/secretmanager.secretAccessor` *only* to that service account for the specific secrets it needs. Prefer per-secret IAM (`google_secret_manager_secret_iam_member`) over a project-level grant.
+- Compute VM service account has minimized OAuth scopes (`logging.write`, `devstorage.read_write`) and specific IAM roles (e.g., `roles/storage.objectCreator` for WAL backups). Avoid `cloud-platform` scope.
+- CI Security: A gitleaks job runs on pull requests and stores a JSON report as an artifact; configure `GITLEAKS_SKIP=true` only for exceptional cases.
+- Branch protection and PR policy: require at least 1 approving review and required status checks (e.g., `gitleaks`, `build`) before merging to `main`.
+- Audit logs: keep admin/audit logs and do not exclude them from logging exclusions; only exclude DEBUG and health-check logs as configured.
+
 ## Architecture Diagram
 
 ```

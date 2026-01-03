@@ -8,54 +8,55 @@ High-signal, copy‑pasteable guide to implement the recommended CI/CD flow:
 
 Quick ASCII overview (high signal):
 
+```text
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                                                                            │
-│  EDGEQUAKE REPO (raphaelmansuy/edgequake)                                │
+│  EDGEQUAKE REPO (raphaelmansuy/edgequake)                                  │
 │                                                                            │
-│   1. Dev Push to main                                                     │
-│      ▼                                                                     │
-│   GitHub Actions: Build & Push (OIDC to GCP)                             │
-│      ├─ Build Next.js image (edgequake_webui/)                           │
-│      ├─ Build Rust image (edgequake/)                                    │
-│      └─ Push to Artifact Registry (tagged by commit SHA)                 │
-│      ▼                                                                     │
-│   2. Repository Dispatch (with image URLs in payload)                    │
-│      │                                                                    │
-│      │ Event: repository_dispatch (type: new-image)                      │
-│      │ Payload: {nextjs_image, rust_image, source_commit}               │
-│      │                                                                    │
-│      └──────────────────────────────────────────────────────┐           │
-│                                                             │            │
-└─────────────────────────────────────────────────────────────┼────────────┘
-                                                              │
-                                                              ▼
+│  1. Dev Push to main                                                       │
+│     ▼                                                                      │
+│  GitHub Actions: Build & Push (OIDC to GCP)                                │
+│     ├─ Build Next.js image (edgequake_webui/)                              │
+│     ├─ Build Rust image (edgequake/)                                       │
+│     └─ Push to Artifact Registry (tagged by commit SHA)                    │
+│        ▼                                                                   │
+│  2. Repository Dispatch (with image URLs in payload)                       │
+│     │                                                                      │
+│     │  Event: repository_dispatch (type: new-image)                        │
+│     │  Payload: {nextjs_image, rust_image, source_commit}                  │
+│     │                                                                      │
+│     └──────────────────────────────────────────────────────┐               │
+│                                                            │               │
+└────────────────────────────────────────────────────────────┼───────────────┘
+                                                             │
+                                                             ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                                                                            │
-│  INFRA REPO (raphaelmansuy/gcp-cloud-graph-stack)                        │
+│  INFRA REPO (raphaelmansuy/gcp-cloud-graph-stack)                          │
 │                                                                            │
-│   3. Receive repository_dispatch (new-image)                             │
-│      ▼                                                                     │
-│   GitHub Actions: Deploy on Image Dispatch (OIDC to GCP)                │
-│      ├─ Parse image URLs from dispatch payload                          │
-│      ├─ Authenticate to GCP (Workload Identity Federation)              │
-│      └─ Initialize Terraform (GCS backend: bucket/${PROJECT}-tf-state)   │
-│      ▼                                                                     │
-│   4. Terraform Plan (with image variables)                               │
-│      └─ terraform plan \\                                                │
-│         -var="nextjs_image_url=${NEXTJS_IMAGE}" \\                      │
-│         -var="rust_api_image_url=${RUST_IMAGE}"                         │
-│      ▼                                                                     │
-│   5. [OPTIONAL] Manual Approval or Auto-Apply                            │
-│      ├─ On approval: proceed to apply                                    │
-│      └─ On auto-apply: terraform apply                                   │
-│      ▼                                                                     │
-│   6. Cloud Run + VM Updated                                              │
-│      ├─ Next.js service deployed with new image                         │
-│      ├─ Rust API service deployed with new image                        │
-│      └─ PostgreSQL VM retains persistent disk                           │
+│  3. Receive repository_dispatch (new-image)                                │
+│     ▼                                                                      │
+│  GitHub Actions: Deploy on Image Dispatch (OIDC to GCP)                    │
+│     ├─ Parse image URLs from dispatch payload                              │
+│     ├─ Authenticate to GCP (Workload Identity Federation)                  │
+│     └─ Initialize Terraform (GCS backend: bucket/${PROJECT}-tf-state)      │
+│        ▼                                                                   │
+│  4. Terraform Plan (with image variables)                                  │
+│     └─ terraform plan \                                                    │
+│          -var="nextjs_image_url=${NEXTJS_IMAGE}" \                         │
+│          -var="rust_api_image_url=${RUST_IMAGE}"                           │
+│        ▼                                                                   │
+│  5. [OPTIONAL] Manual Approval or Auto-Apply                               │
+│     ├─ On approval: proceed to apply                                       │
+│     └─ On auto-apply: terraform apply                                      │
+│        ▼                                                                   │
+│  6. Cloud Run + VM Updated                                                 │
+│     ├─ Next.js service deployed with new image                             │
+│     ├─ Rust API service deployed with new image                            │
+│     └─ PostgreSQL VM retains persistent disk                               │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
-
+```
 Key signal: Single command in edgequake → full stack deployed (images + infra)
 
 Why this pattern

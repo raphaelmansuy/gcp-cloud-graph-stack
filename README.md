@@ -16,6 +16,23 @@ This repository contains a **production-ready infrastructure and CI/CD setup** f
 
 ---
 
+## ⚠️ Important Security Notice
+
+### Database Access Solution Update
+
+**The SSH port forwarding solution for database access violates GCP security best practices** and is **not recommended for production use**.
+
+**Official GCP Recommendation**: Use **Cloud SQL Auth Proxy** for accessing Cloud SQL instances in private networks.
+
+**Current Status**: 
+- ❌ SSH tunneling implemented (functional but insecure)
+- ✅ **Challenge documented**: [SSH_TUNNEL_CHALLENGE.md](SSH_TUNNEL_CHALLENGE.md)
+- 🔄 **Migration needed**: Replace SSH tunnel with Cloud SQL Auth Proxy
+
+**Action Required**: Review [SSH_TUNNEL_CHALLENGE.md](SSH_TUNNEL_CHALLENGE.md) and migrate to Cloud SQL Auth Proxy for production deployments.
+
+---
+
 ## Quick Navigation
 
 ### 🚀 Start Here
@@ -64,6 +81,14 @@ This repository contains a **production-ready infrastructure and CI/CD setup** f
    - ROI analysis for different scenarios
    - Production readiness checklist
 
+### 🔒 Security & Compliance
+
+7. **[SSH Tunnel Security Challenge](./SSH_TUNNEL_CHALLENGE.md)** (10 minutes)
+   - Analysis of SSH tunneling vs GCP best practices
+   - Official GCP recommendations for database access
+   - Migration path to Cloud SQL Auth Proxy
+   - Security implications and compliance considerations
+
 ---
 
 ## File Structure
@@ -71,15 +96,37 @@ This repository contains a **production-ready infrastructure and CI/CD setup** f
 ```
 gcp-cloud-graph-stack/
 ├── docs/
-│   ├── 01-architecture.md                 # System design & decisions
-│   ├── 02-deployment-terraform.md         # Terraform walkthrough
-│   ├── 03-deployment-github-actions.md    # GitHub Actions setup
-│   ├── 04-ci-cd-architecture.md           # CI/CD patterns & flows
-│   ├── 05-quick-start.md                  # Quick start guide (THIS FILE)
-│   ├── 06-roadmap-costs.md                # Roadmap & cost analysis
-│   └── README.md                          # This file
+│   ├── 01-architecture.md                    # System design & decisions
+│   ├── 02-deployment-terraform.md            # Terraform walkthrough
+│   ├── 03-deployment-github-actions.md       # GitHub Actions setup
+│   ├── 04-ci-cd-architecture.md              # CI/CD patterns & flows
+│   ├── 05-quick-start.md                     # Quick start guide
+│   ├── 06-roadmap-costs.md                   # Roadmap & cost analysis
+│   ├── 07-db-disk-ops.md                     # Disk protection & snapshots
+│   ├── 08-github-actions-deploy-edgequake.md # CI/CD deployment
+│   ├── 09-database-connection-config.md      # Database configuration
+│   ├── 10-environment-configuration-examples.md # Environment examples
+│   ├── 11-edgequake-integration-summary.md   # Integration summary
+│   ├── 13-pre-deployment-terraform-checklist.md # Pre-deployment checklist
+│   ├── 14-terraform-status-and-updates.md    # Terraform status analysis
+│   ├── 15-edgequake-deployment-ready.md      # Deployment ready guide
+│   └── README.md                             # This file
+│
+├── archive/                                  # Archived redundant documents
+│   ├── docs/12-documentation-index.md        # Superseded by README
+│   ├── docs/16-developer-database-access.md  # Deprecated SSH solution
+│   ├── DATABASE_ACCESS.md                    # Deprecated SSH solution
+│   ├── DATABASE_ACCESS_SUMMARY.md            # Deprecated SSH solution
+│   ├── DB_QUICK_REFERENCE.md                 # Deprecated SSH solution
+│   ├── DEVELOPER_GUIDE.md                    # Deprecated SSH solution
+│   ├── DELIVERABLES.md                       # Redundant
+│   ├── DEPLOYMENT-CHECKLIST.md               # Superseded by docs/13
+│   ├── DEPLOYMENT_READY.md                   # Superseded by docs/15
+│   ├── INDEX.md                              # Superseded by README
+│   └── READING-ORDER.md                      # Superseded by README
 │
 ├── terraform/
+│   ├── main.tf                               # Root configuration
 │   ├── main.tf                            # Root configuration
 │   ├── variables.tf                       # Input variables (40+)
 │   ├── outputs.tf                         # Exported values

@@ -1,12 +1,24 @@
 # Database Access Solution - Implementation Summary
 
-**Date**: January 3, 2025  
-**Status**: ✅ COMPLETE & READY FOR USE  
-**Solution Type**: SSH Port Forwarding (Recommended)
+## ⚠️ CRITICAL SECURITY WARNING
+
+**This SSH tunneling implementation violates GCP security best practices** and is **not recommended for production use**.
+
+**Official GCP Recommendation**: Use **Cloud SQL Auth Proxy** instead of SSH port forwarding.
+
+**See**: [SSH_TUNNEL_CHALLENGE.md](SSH_TUNNEL_CHALLENGE.md) for detailed analysis of why SSH tunneling is problematic and should be replaced.
+
+**Migration Required**: Replace this SSH tunnel approach with Cloud SQL Auth Proxy for production deployments.
 
 ---
 
-## 📋 Deliverables
+**Date**: January 3, 2025  
+**Status**: ⚠️ DEPRECATED - SECURITY ISSUES  
+**Solution Type**: SSH Port Forwarding (NOT RECOMMENDED)
+
+---
+
+## 📋 Deliverables (DEPRECATED - See Warning Above)
 
 ### 1. SSH Tunnel Script
 - **File**: [scripts/db-tunnel.sh](scripts/db-tunnel.sh) (196 lines)

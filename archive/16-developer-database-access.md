@@ -1,6 +1,18 @@
 # Developer Database Access Guide
 
-This document provides multiple solutions for accessing the PostgreSQL database from your local developer computer.
+## ⚠️ CRITICAL SECURITY WARNING
+
+**This SSH tunneling solution violates GCP security best practices** and is **not recommended for production use**.
+
+**Official GCP Recommendation**: Use **Cloud SQL Auth Proxy** instead of SSH port forwarding.
+
+**See**: [SSH_TUNNEL_CHALLENGE.md](../SSH_TUNNEL_CHALLENGE.md) for detailed analysis of why SSH tunneling is problematic and should be replaced.
+
+**Migration Required**: Replace this SSH tunnel approach with Cloud SQL Auth Proxy for production deployments.
+
+---
+
+## 🎯 Overview (DEPRECATED - See Warning Above)
 
 ## 🎯 Recommended Solution: SSH Port Forwarding (Simplest)
 

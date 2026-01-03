@@ -1,8 +1,20 @@
 # Developer Quick Start Guide
 
+## ⚠️ CRITICAL SECURITY WARNING
+
+**The SSH tunneling solution described below violates GCP security best practices** and is **not recommended for production use**.
+
+**Official GCP Recommendation**: Use **Cloud SQL Auth Proxy** instead of SSH port forwarding.
+
+**See**: [SSH_TUNNEL_CHALLENGE.md](SSH_TUNNEL_CHALLENGE.md) for detailed analysis and migration guidance.
+
+**Migration Required**: Replace SSH tunnel with Cloud SQL Auth Proxy for production deployments.
+
+---
+
 Welcome! This guide helps you get started developing with the gcp-cloud-graph-stack.
 
-## 📚 Quick Links
+## 📚 Quick Links (Updated)
 
 | Topic | Location |
 |-------|----------|

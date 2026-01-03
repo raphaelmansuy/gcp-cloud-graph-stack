@@ -1,7 +1,19 @@
 # 🎯 Developer Database Access - Quick Reference
 
-**Status**: ✅ Production Ready  
-**Type**: SSH Port Forwarding  
+## ⚠️ CRITICAL SECURITY WARNING
+
+**This SSH tunneling solution violates GCP security best practices** and is **not recommended for production use**.
+
+**Official GCP Recommendation**: Use **Cloud SQL Auth Proxy** instead of SSH port forwarding.
+
+**See**: [SSH_TUNNEL_CHALLENGE.md](SSH_TUNNEL_CHALLENGE.md) for detailed analysis and migration guidance.
+
+**Migration Required**: Replace SSH tunnel with Cloud SQL Auth Proxy for production deployments.
+
+---
+
+**Status**: ⚠️ DEPRECATED - SECURITY ISSUES  
+**Type**: SSH Port Forwarding (NOT RECOMMENDED)  
 **Setup Time**: 2 minutes  
 **Cost**: Free  
 

@@ -42,6 +42,12 @@ help:
 	@echo "  make ssh                 # SSH into PostgreSQL VM"
 	@echo "  make costs               # Show estimated costs"
 	@echo ""
+	@echo "Developer Database Access (Local):"
+	@echo "  make db-tunnel           # Create SSH tunnel to database (port 5432)"
+	@echo "  make db-tunnel-custom    # Create SSH tunnel on custom port 5433"
+	@echo "  make db-connect          # Connect to database via psql (tunnel must be running)"
+	@echo "  make db-check            # Check PostgreSQL status on VM"
+	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean               # Clean Terraform cache"
 	@echo "  make clean-all           # Clean everything"
@@ -222,6 +228,40 @@ costs:
 	@echo "  TOTAL (Production):                  ~$$250/month"
 	@echo ""
 	@echo "See docs/06-roadmap-costs.md for detailed breakdown"
+
+# Database Tunnel & Local Access
+.PHONY: db-tunnel db-tunnel-custom db-connect db-check
+db-tunnel:
+	@echo "🔌 Starting PostgreSQL SSH Tunnel..."
+	@echo "   Local: localhost:5432"
+	@echo "   Remote: ${REGION}-a (PostgreSQL VM)"
+	@echo ""
+	@echo "Press Ctrl+C to stop the tunnel"
+	@echo ""
+	./scripts/db-tunnel.sh ${PROJECT_ID} ${REGION}-a db-vm 5432 5432
+
+db-tunnel-custom:
+	@echo "🔌 Starting PostgreSQL SSH Tunnel on custom port 5433..."
+	@echo "   Local: localhost:5433"
+	@echo "   Remote: ${REGION}-a (PostgreSQL VM port 5432)"
+	@echo ""
+	@echo "Connect with: psql -h localhost -p 5433 -U postgres -d graph_db"
+	@echo ""
+	./scripts/db-tunnel.sh ${PROJECT_ID} ${REGION}-a db-vm 5433 5432
+
+db-connect:
+	@echo "📦 Connecting to PostgreSQL (ensure tunnel is running in another terminal)..."
+	@echo "   Host: localhost"
+	@echo "   Port: 5432"
+	@echo "   Database: graph_db"
+	@echo "   User: postgres"
+	@echo ""
+	psql -h localhost -U postgres -d graph_db
+
+db-check:
+	@echo "🔍 Checking PostgreSQL status on VM..."
+	gcloud compute ssh db-vm --zone=${REGION}-a --project=${PROJECT_ID} -- \
+	  "echo 'Checking PostgreSQL:' && sudo systemctl status postgresql --no-pager"
 
 # Cleanup
 clean:

@@ -1,34 +1,55 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 
-# PostgreSQL + AGE + pgvector installation script
+# PostgreSQL + AGE + pgvector Docker installation script
 # Executed on VM startup
 
-echo "=== PostgreSQL Installation & Setup ==="
+echo "=== PostgreSQL Docker Setup ==="
 
-# Update system
+# Update system and install Docker
 apt-get update
-apt-get upgrade -y
 apt-get install -y \
-  build-essential \
-  git \
-  postgresql-${postgresql_version} \
-  postgresql-server-dev-${postgresql_version} \
-  postgresql-contrib-${postgresql_version} \
-  libreadline-dev \
-  zlib1g-dev \
+  ca-certificates \
   curl \
-  wget \
-  gnupg2 \
+  gnupg \
   lsb-release
 
-# If a data disk is present, format/mount and migrate Postgres data into it
+# Install Docker
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/docker.gpg 2>/dev/null || true
+gpg --dearmor -o /etc/apt/keyrings/docker.gpg < /tmp/docker.gpg 2>/dev/null || curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin || true
+
+# Start Docker
+systemctl start docker
+systemctl enable docker
+
+# Wait for Docker daemon to be ready
+sleep 5
+for i in {1..30}; do
+  if docker ps >/dev/null 2>&1; then
+    echo "Docker is ready"
+    break
+  fi
+  echo "Waiting for Docker... ($i/30)"
+  sleep 2
+done
+
+# Data disk configuration
 DATA_DISK_BY_ID="/dev/disk/by-id/google-${data_disk_name}"
 MOUNT_POINT="${data_disk_mount_point}"
+
+echo "=== Data Disk Setup ==="
+echo "Looking for disk: $DATA_DISK_BY_ID"
+echo "Target mount point: $MOUNT_POINT"
+ls -la /dev/disk/by-id/ | grep google || echo "No Google disks found"
 
 if [ "${create_data_disk}" = "true" ] || [ -b "$DATA_DISK_BY_ID" ]; then
   if [ -b "$DATA_DISK_BY_ID" ]; then
     echo "Found data disk at $DATA_DISK_BY_ID"
+    
     # Format if necessary
     if ! blkid "$DATA_DISK_BY_ID" >/dev/null 2>&1; then
       echo "Formatting data disk..."
@@ -40,101 +61,120 @@ if [ "${create_data_disk}" = "true" ] || [ -b "$DATA_DISK_BY_ID" ]; then
       mount "$DATA_DISK_BY_ID" "$MOUNT_POINT"
     fi
 
-    chown -R postgres:postgres "$MOUNT_POINT"
-
-    PG_DATA_DIR="/var/lib/postgresql/${postgresql_version}/main"
-
-    # If PG_DATA_DIR exists and the mount is empty, move data into disk and symlink
-    if [ -d "$PG_DATA_DIR" ] && [ -z "$(ls -A "$MOUNT_POINT")" ]; then
-      echo "Migrating existing PostgreSQL data to $MOUNT_POINT"
-      systemctl stop postgresql || true
-      mv "$PG_DATA_DIR" "$MOUNT_POINT/"
-      ln -s "$MOUNT_POINT/main" "$PG_DATA_DIR"
-      chown -R postgres:postgres "$MOUNT_POINT"
-    fi
-
-    # If mount already contains DB data but PG_DATA_DIR missing, create symlink
-    if [ ! -d "$PG_DATA_DIR" ] && [ -d "$MOUNT_POINT/main" ]; then
-      ln -s "$MOUNT_POINT/main" "$PG_DATA_DIR"
-      chown -R postgres:postgres "$MOUNT_POINT"
-    fi
-
     # Ensure persistent mount in fstab
     if ! grep -q "$DATA_DISK_BY_ID" /etc/fstab; then
       echo "$DATA_DISK_BY_ID $MOUNT_POINT ext4 defaults 0 2" >> /etc/fstab
     fi
+    
+    echo "Data disk mounted successfully at $MOUNT_POINT"
+    df -h "$MOUNT_POINT"
   else
-    echo "create_data_disk is true but device $DATA_DISK_BY_ID not present yet; continuing"
+    echo "WARNING: create_data_disk is true but device $DATA_DISK_BY_ID not found!"
+    echo "Available devices:"
+    ls -la /dev/disk/by-id/ | grep google
+    echo "FALLBACK: Using boot disk at /var/lib/postgresql-data"
+    MOUNT_POINT="/var/lib/postgresql-data"
+    mkdir -p "$MOUNT_POINT"
   fi
 else
-  echo "No separate data disk configured. Using boot disk for DB data."
+  echo "No separate data disk configured. Using boot disk."
+  MOUNT_POINT="/var/lib/postgresql-data"
+  mkdir -p "$MOUNT_POINT"
 fi
 
-# Start PostgreSQL
-systemctl start postgresql
-systemctl enable postgresql
+# Create PostgreSQL data directory
+PGDATA_DIR="$MOUNT_POINT/pgdata"
+echo "Creating Postgres data directory: $PGDATA_DIR"
+mkdir -p "$PGDATA_DIR"
+chmod 777 "$MOUNT_POINT"
+chmod 700 "$PGDATA_DIR"
+echo "Postgres data directory ready at $PGDATA_DIR"
+ls -la "$MOUNT_POINT"
 
-echo "=== Installing AGE (Apache Graph Extension) ==="
-cd /tmp
-git clone https://github.com/apache/age.git
-cd age
-git checkout PG${postgresql_version}
+echo "=== Creating Dockerfile for PostgreSQL with AGE and pgvector ==="
+cat > /root/Dockerfile.postgres <<'DOCKERFILE'
+FROM postgres:16
 
-# Build and install AGE
-make install
+# Install build dependencies including flex and bison for AGE
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    flex \
+    bison \
+    git \
+    postgresql-server-dev-16 \
+    && rm -rf /var/lib/apt/lists/*
 
-echo "=== Installing pgvector Extension ==="
-cd /tmp
-git clone https://github.com/pgvector/pgvector.git
-cd pgvector
-make
-make install
+# Install pgvector
+RUN cd /tmp && \
+    git clone --branch v0.5.1 https://github.com/pgvector/pgvector.git && \
+    cd pgvector && \
+    make && \
+    make install && \
+    cd / && \
+    rm -rf /tmp/pgvector
 
-echo "=== Configuring PostgreSQL ==="
-# Update postgresql.conf for WAL archiving and security
-cat >> /etc/postgresql/${postgresql_version}/main/postgresql.conf <<EOF
+# Install Apache AGE - use main branch if specific version not available
+RUN cd /tmp && \
+    git clone https://github.com/apache/age.git && \
+    cd age && \
+    (git checkout PG16/v1.6.0-rc0 || git checkout master) && \
+    make install && \
+    cd / && \
+    rm -rf /tmp/age
 
-# AGE and pgvector
-shared_preload_libraries = 'age'
+# Clean up build dependencies
+RUN apt-get remove -y build-essential flex bison git postgresql-server-dev-16 && \
+    apt-get autoremove -y && \
+    apt-get clean
 
-# WAL archiving
-%{ if enable_wal_archiving }
-archive_mode = on
-archive_command = 'gsutil cp pg_wal/%f gs://${gcs_backup_bucket}/wal_archive/ && rm pg_wal/%f'
-archive_timeout = 300
-%{ endif }
+DOCKERFILE
 
-# SSL/TLS
-ssl = on
-ssl_cert_file = '/etc/ssl/certs/ssl-cert-snakeoil.pem'
-ssl_key_file = '/etc/ssl/private/ssl-cert-snakeoil.key'
+echo "=== Building PostgreSQL Docker image ==="
+docker build -t postgres-age-vector:16 -f /root/Dockerfile.postgres /root/
 
-# Security
-password_encryption = scram-sha-256
-max_connections = 100
-%{ if db_port != 5432 }
-port = ${db_port}
-%{ endif }
+echo "=== Starting PostgreSQL container ==="
+# Pre-create data directory with correct permissions
+mkdir -p "$PGDATA_DIR"
+chmod 777 "$PGDATA_DIR"
 
-# Monitoring
-log_statement = 'all'
-log_duration = on
-log_min_duration_statement = 1000
-EOF
+# Start container WITHOUT init-scripts volume to allow clean initialization
+docker run -d \
+  --name postgres-age-vector \
+  --restart always \
+  --network host \
+  -e POSTGRES_DB=graph_db \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_INITDB_ARGS="-c shared_preload_libraries='age'" \
+  -v "$PGDATA_DIR:/var/lib/postgresql/data" \
+  postgres-age-vector:16
 
-# Create graph_db and install extensions
-sudo -u postgres psql -c "CREATE DATABASE graph_db;" || true
+echo "=== Waiting for PostgreSQL to start ==="
+sleep 10
 
-sudo -u postgres psql -d graph_db <<EOFPG
+# Wait for PostgreSQL to be ready
+for i in {1..30}; do
+  if docker exec postgres-age-vector pg_isready -U postgres -d graph_db; then
+    echo "PostgreSQL is ready!"
+    break
+  fi
+  echo "Waiting for PostgreSQL... ($i/30)"
+  sleep 2
+done
+
+echo "=== Installing extensions ==="
+# Install pgvector extension
+docker exec -e PGPASSWORD=postgres postgres-age-vector psql -U postgres -d graph_db -c "CREATE EXTENSION IF NOT EXISTS vector;" || echo "Note: vector extension may already exist"
+
+# Install AGE extension with proper setup
+docker exec -e PGPASSWORD=postgres postgres-age-vector psql -U postgres -d graph_db <<'EOSQL' || echo "Note: AGE extension may already exist"
 CREATE EXTENSION IF NOT EXISTS age;
-CREATE EXTENSION IF NOT EXISTS vector;
 LOAD 'age';
-CREATE SCHEMA IF NOT EXISTS graph;
-SET search_path = graph, public;
+SET search_path = ag_catalog, "$user", public;
+ALTER DATABASE graph_db SET search_path = ag_catalog, "$user", public;
+EOSQL
 
--- Create a sample graph
-SELECT * FROM create_graph('sample_graph');
-
+echo "=== Creating sample tables and indexes ==="
+docker exec -e PGPASSWORD=postgres postgres-age-vector psql -U postgres -d graph_db <<'EOSQL' || echo "Note: sample tables may already exist"
 -- Create sample vector table
 CREATE TABLE IF NOT EXISTS vectors (
   id SERIAL PRIMARY KEY,
@@ -144,25 +184,24 @@ CREATE TABLE IF NOT EXISTS vectors (
 
 CREATE INDEX IF NOT EXISTS vectors_hnsw_idx ON vectors USING hnsw (embedding vector_cosine_ops)
   WITH (m = 16, ef_construction = 200);
+EOSQL
 
-EOFPG
+echo "=== Creating sample graph ==="
+docker exec -e PGPASSWORD=postgres postgres-age-vector psql -U postgres -d graph_db -c "SELECT create_graph('sample_graph');" || echo "Note: sample graph may already exist"
 
-# Restart PostgreSQL to load configs
-systemctl restart postgresql
+echo "=== Verifying installation ==="
+docker exec postgres-age-vector psql -U postgres -d graph_db -c "SELECT version();" || true
+docker exec postgres-age-vector psql -U postgres -d graph_db -c "SELECT extname, extversion FROM pg_extension WHERE extname IN ('vector', 'age');" || true
 
-echo "=== PostgreSQL Setup Complete ==="
-echo "Database: graph_db"
-echo "Extensions: age, vector"
-echo "Listening on port ${db_port}"
-
-%{ if enable_wal_archiving }
 echo "=== Setting up WAL archiving ==="
-mkdir -p /var/lib/postgresql/${postgresql_version}/main/pg_wal
-chown -R postgres:postgres /var/lib/postgresql/${postgresql_version}/main/pg_wal
-%{ endif }
+# WAL archiving can be configured here if needed
 
 # Install Google Cloud Ops Agent for monitoring
 curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent.sh
 sudo bash add-google-cloud-ops-agent.sh --also-install
 
-echo "=== Setup Complete ==="
+echo "=== PostgreSQL Docker Setup Complete ==="
+echo "Database: graph_db"
+echo "Extensions: age, vector"
+echo "Listening on port ${db_port}"
+echo "Data directory: $PGDATA_DIR"

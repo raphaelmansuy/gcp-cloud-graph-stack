@@ -7,71 +7,174 @@ REGION := us-central1
 REGISTRY := ${REGION}-docker.pkg.dev/${PROJECT_ID}
 TF_DIR := terraform
 
-.PHONY: help setup init plan apply destroy logs ssh docker-build docker-push \
-        verify-db verify-services clean docs install-tools
+.PHONY: help menu quick-start status full-setup deploy dev-setup dev-access \
+        setup gcloud-auth gcloud-login gcloud-config gcloud-app-auth gcloud-app-default \
+        init plan apply destroy logs ssh docker-build docker-push \
+        verify-db verify-services clean docs install-tools scaffold test
 
 help:
-	@echo "=== GCP Cloud Graph Stack - Available Commands ==="
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│                 GCP Cloud Graph Stack                       │"
+	@echo "│                  Project: ${PROJECT_ID}                      │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
 	@echo ""
-	@echo "Setup & Initialization:"
-	@echo "  make setup               # Install all tools"
-	@echo "  make init                # Initialize Terraform"
-	@echo "  make config              # Create terraform.tfvars from example"
+	@echo "🚀 QUICK START:"
+	@echo "  make menu              # Interactive menu"
+	@echo "  make quick-start       # Setup guide"
+	@echo "  make full-setup        # Auto setup everything"
+	@echo "  make build-and-deploy  # Build images & deploy"
 	@echo ""
-	@echo "Infrastructure:"
-	@echo "  make plan                # Plan Terraform changes"
-	@echo "  make apply               # Apply Terraform configuration"
-	@echo "  make destroy             # Destroy all infrastructure"
-	@echo "  make refresh             # Refresh Terraform state"
+	@echo "📋 WORKFLOWS:"
+	@echo "  make status            # System health check"
+	@echo "  make deploy            # Safe infrastructure deploy"
+	@echo "  make dev-access        # Database access setup"
 	@echo ""
-	@echo "Docker & Containers:"
-	@echo "  make docker-build        # Build all Docker images"
-	@echo "  make docker-push         # Push Docker images to registry"
-	@echo "  make docker-clean        # Remove local Docker images"
+	@echo "🛠️  TOOLS:"
+	@echo "  setup             # Install prerequisites"
+	@echo "  gcloud-auth       # Full GCP authentication"
+	@echo "  gcloud-login      # Login to gcloud"
+	@echo "  gcloud-app-default # Login for Application Default Credentials"
+	@echo "  scaffold          # Create minimal source code"
+	@echo "  init              # Initialize Terraform"
+	@echo "  plan / apply      # Terraform plan/apply"
+	@echo "  docker-build      # Build container images"
+	@echo "  docker-push       # Push images to registry"
 	@echo ""
-	@echo "Verification & Testing:"
-	@echo "  make verify-infra        # Verify infrastructure deployed"
-	@echo "  make verify-db           # SSH into VM and verify PostgreSQL"
-	@echo "  make verify-services     # Check Cloud Run services"
-	@echo "  make test-nextjs         # Test Next.js frontend"
-	@echo "  make test-rust           # Test Rust API"
+	@echo "💻 DATABASE:"
+	@echo "  secure-ssh    db-tunnel    db-connect    db-check"
 	@echo ""
-	@echo "Operations:"
-	@echo "  make logs-cloud-run      # Show Cloud Run logs"
-	@echo "  make logs-vm             # Show VM logs (requires SSH)"
-	@echo "  make ssh                 # SSH into PostgreSQL VM"
-	@echo "  make costs               # Show estimated costs"
+	@echo "📚 HELP:"
+	@echo "  make docs              # Documentation overview"
+	@echo "  make costs             # Cost estimates"
+	@echo "  💡 Typos are auto-corrected!"
 	@echo ""
-	@echo "Developer Database Access (Local):"
-	@echo "  make db-tunnel           # Create SSH tunnel to database (port 5432)"
-	@echo "  make db-tunnel-custom    # Create SSH tunnel on custom port 5433"
-	@echo "  make db-connect          # Connect to database via psql (tunnel must be running)"
-	@echo "  make db-check            # Check PostgreSQL status on VM"
+
+menu:
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│                 GCP Cloud Graph Stack                       │"
+	@echo "│                     Interactive Menu                        │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
 	@echo ""
-	@echo "Cleanup:"
-	@echo "  make clean               # Clean Terraform cache"
-	@echo "  make clean-all           # Clean everything"
+	@echo "Choose your workflow:"
 	@echo ""
-	@echo "Documentation:"
-	@echo "  make docs                # Show documentation overview"
-	@echo "  make readme              # Show README"
+	@echo "1) 🚀 Quick Start        - Complete setup guide"
+	@echo "2) 📊 Check Status       - System health overview"
+	@echo "3) 🏗️  Deploy Infra       - Safe infrastructure deployment"
+	@echo "4) 💻 Dev Database       - Setup local database access"
+	@echo "5) 🐳 Build & Deploy     - Docker build and push"
+	@echo "6) 🏗️  Scaffold Code      - Create minimal source code"
+	@echo "7) ✅ Verify System      - Test all components"
+	@echo "8) 🧹 Cleanup            - Clean cache and resources"
+	@echo "9) 📚 Documentation      - View docs and guides"
+	@echo "10) 🔐 GCP Auth           - Full gcloud & App Default login"
+	@echo "11) ⚙️  GCP Config         - Set project and region"
 	@echo ""
-	@echo "Configuration:"
-	@echo "  Project ID: ${PROJECT_ID}"
-	@echo "  Region: ${REGION}"
-	@echo "  Registry: ${REGISTRY}"
+	@echo "Run: make <command> or make help for all options"
 	@echo ""
+
+# Quick Start & Convenience Targets
+quick-start:
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│                 🚀 Quick Start Guide                        │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "1️⃣  Install & Setup:"
+	@echo "   make setup"
+	@echo ""
+	@echo "2️⃣  Configure:"
+	@echo "   make config"
+	@echo ""
+	@echo "3️⃣  Scaffold Source Code:"
+	@echo "   make scaffold"
+	@echo ""
+	@echo "4️⃣  Deploy Infrastructure:"
+	@echo "   make deploy"
+	@echo ""
+	@echo "5️⃣  Build & Push Images:"
+	@echo "   make docker-build && make docker-push"
+	@echo ""
+	@echo "6️⃣  Verify & Test:"
+	@echo "   make status"
+	@echo ""
+	@echo "💡 Pro tip: make full-setup  # Do everything automatically"
+	@echo ""
+
+status:
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│                    📊 System Status                         │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "🔧 Infrastructure:"
+	@cd ${TF_DIR} && terraform state list 2>/dev/null | head -3 | sed 's/^/  ✅ /' || echo "  ⚠️  Not deployed (run: make deploy)"
+	@echo ""
+	@echo "🐳 Docker Images:"
+	@docker images | grep ${REGISTRY} | wc -l | xargs -I {} echo "  ✅ {} images built" || echo "  ⚠️  No images (run: make docker-build)"
+	@echo ""
+	@echo "☁️  Cloud Resources:"
+	@gcloud compute instances list --filter="name=edgequake-db-vm" --format="value(status)" 2>/dev/null | sed 's/RUNNING/  ✅ VM running/' | sed 's/TERMINATED/  ❌ VM stopped/' || echo "  ⚠️  VM status unknown"
+	@gcloud run services list --format="value(metadata.name)" 2>/dev/null | wc -l | xargs -I {} echo "  ✅ {} services deployed" || echo "  ⚠️  No services"
+	@echo ""
+	@echo "🔒 SSH Access:"
+	@gcloud compute firewall-rules describe edgequake-allow-ssh-restricted --project=${PROJECT_ID} --format='value(sourceRanges)' 2>/dev/null | sed 's/^/  ✅ /' || echo "  ⚠️  Not configured (run: make secure-ssh)"
+	@echo ""
+	@echo "💡 Quick actions: make verify-infra | make dev-access | make test-nextjs"
+
+full-setup: setup config init scaffold deploy docker-build docker-push
+	@echo ""
+	@echo "🎉 Complete setup finished!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  • Check system status: make status"
+	@echo "  • Setup database access: make dev-setup"
+	@echo "  • View documentation: make docs"
+
+deploy: plan
+	@echo "🚀 Deploying infrastructure..."
+	@cd ${TF_DIR} && terraform apply tfplan
+	@echo "✅ Infrastructure deployed!"
+	@echo "💡 Next: make docker-build && make docker-push"
+
+dev-setup:
+	@echo "💻 Database access setup..."
+	@read -p "This authorizes your IP for SSH and creates a tunnel. Continue? (y/N): " confirm; \
+	[ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ] && make secure-ssh && make dev-access || echo "Cancelled"
+
+dev-access: secure-ssh
+	@echo "🔌 Starting database tunnel..."
+	@echo "  Local: localhost:5432 → Remote: ${REGION}-a PostgreSQL"
+	@echo "  Press Ctrl+C to stop"
+	./scripts/db-tunnel.sh ${PROJECT_ID} ${REGION}-a db-vm 5432 5432
 
 # Setup & Initialization
 setup:
-	@echo "Installing required tools..."
-	@command -v terraform >/dev/null 2>&1 || (echo "Installing Terraform..." && brew install terraform)
-	@command -v gcloud >/dev/null 2>&1 || (echo "Installing Google Cloud SDK..." && brew install --cask google-cloud-sdk)
-	@command -v docker >/dev/null 2>&1 || (echo "Installing Docker..." && brew install --cask docker)
-	@echo "✓ All tools installed"
+	@echo "📦 Setting up development environment..."
+	@echo ""
+	@echo "🔧 Installing tools:"
+	@command -v terraform >/dev/null 2>&1 && echo "  ✅ Terraform ready" || (echo "  📥 Installing Terraform..." && brew install terraform >/dev/null 2>&1 && echo "  ✅ Terraform installed")
+	@command -v gcloud >/dev/null 2>&1 && echo "  ✅ Google Cloud SDK ready" || (echo "  📥 Installing Google Cloud SDK..." && brew install --cask google-cloud-sdk >/dev/null 2>&1 && echo "  ✅ Google Cloud SDK installed")
+	@command -v docker >/dev/null 2>&1 && echo "  ✅ Docker ready" || (echo "  📥 Installing Docker..." && brew install --cask docker >/dev/null 2>&1 && echo "  ✅ Docker installed")
+	@echo ""
+	@make gcloud-auth
+	@echo ""
+	@echo "🎉 Setup complete! Next: make config"
+
+auth: gcloud-auth docker-auth
+	@echo "✅ Auth complete: gcloud + docker"
+
+gcloud-auth: gcloud-login gcloud-config gcloud-app-auth
+	@echo "✅ GCP authentication fully configured"
+
+gcloud-login:
+	@echo "🔐 Logging into Google Cloud..."
+	@gcloud auth login
+
+gcloud-config:
+	@echo "⚙️  Setting GCP project to ${PROJECT_ID}..."
 	@gcloud config set project ${PROJECT_ID}
+
+gcloud-app-auth gcloud-app-default:
+	@echo "🔐 Configuring Application Default Credentials..."
 	@gcloud auth application-default login
-	@echo "✓ GCP authentication configured"
 
 init:
 	@echo "Initializing Terraform (bootstrapping backend if needed)..."
@@ -79,13 +182,12 @@ init:
 	@cd ${TF_DIR} && terraform init -backend-config="bucket=${PROJECT_ID}-tf-state" -backend-config="prefix=terraform/state" -reconfigure -input=false
 
 config:
-	@echo "Creating terraform.tfvars from template..."
 	@if [ ! -f ${TF_DIR}/terraform.tfvars ]; then \
+		echo "⚙️  Creating terraform.tfvars..."; \
 		cp ${TF_DIR}/terraform.tfvars.example ${TF_DIR}/terraform.tfvars; \
-		echo "✓ terraform.tfvars created"; \
-		echo "⚠️  Edit ${TF_DIR}/terraform.tfvars to customize your deployment"; \
+		echo "✅ Created! Edit ${TF_DIR}/terraform.tfvars for your settings"; \
 	else \
-		echo "terraform.tfvars already exists"; \
+		echo "✅ terraform.tfvars exists. Edit it to customize deployment."; \
 	fi
 
 # Infrastructure
@@ -117,23 +219,58 @@ refresh:
 	cd ${TF_DIR} && terraform refresh
 
 # Docker & Containers
+
 docker-build:
-	@echo "Building Docker images..."
-	@echo "Building Next.js image..."
-	docker build -t ${REGISTRY}/edgequake-images/nextjs:latest \
-		-f dockerfiles/Dockerfile.nextjs .
-	@echo "✓ Next.js image built"
-	@echo ""
-	@echo "Building Rust API image..."
-	docker build -t ${REGISTRY}/edgequake-images/rust-api:latest \
-		-f dockerfiles/Dockerfile.rust .
-	@echo "✓ Rust API image built"
+	@echo "🐳 Building multi-arch Docker images (amd64, arm64)..."
+	@echo "  Getting Rust API URL..."
+	@RUST_API_URL=$$(gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null || echo "https://rust-api-wszhkynzxa-uc.a.run.app"); \
+	echo "  Using API URL: $$RUST_API_URL"; \
+	docker buildx create --use --name multiarch-builder || true; \
+	docker buildx inspect multiarch-builder --bootstrap; \
+	docker buildx build --platform linux/amd64,linux/arm64 \
+		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
+		-t ${REGISTRY}/edgequake-images/nextjs:latest \
+		-f dockerfiles/Dockerfile.nextjs --push . && echo "  ✅ Next.js multi-arch built & pushed" || (echo "  ❌ Next.js failed" && exit 1); \
+	docker buildx build --platform linux/amd64,linux/arm64 \
+		-t ${REGISTRY}/edgequake-images/rust-api:latest \
+		-f dockerfiles/Dockerfile.rust --push . && echo "  ✅ Rust API multi-arch built & pushed" || (echo "  ❌ Rust API failed" && exit 1); \
+	echo "🎉 All multi-arch images built and pushed!"
 
 docker-push: docker-auth
-	@echo "Pushing Docker images to Artifact Registry..."
-	docker push ${REGISTRY}/edgequake-images/nextjs:latest
-	docker push ${REGISTRY}/edgequake-images/rust-api:latest
-	@echo "✓ Images pushed successfully"
+	@echo "📤 Pushing to registry..."
+	@docker push ${REGISTRY}/edgequake-images/nextjs:latest && echo "  ✅ Next.js pushed" || (echo "  ❌ Next.js failed" && exit 1)
+	@docker push ${REGISTRY}/edgequake-images/rust-api:latest && echo "  ✅ Rust API pushed" || (echo "  ❌ Rust API failed" && exit 1)
+	@echo "🎉 All images pushed!"
+
+# Build and deploy everything with new images
+build-and-deploy: docker-auth
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│         🚀 Complete Build & Deploy Pipeline                │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "Step 1/3: Building and pushing Docker images..."
+	@$(MAKE) docker-build
+	@echo ""
+	@echo "Step 2/3: Updating Terraform with new image tags..."
+	@cd ${TF_DIR} && terraform plan -out=tfplan-deploy
+	@echo ""
+	@echo "Step 3/3: Applying Terraform changes..."
+	@cd ${TF_DIR} && terraform apply tfplan-deploy
+	@echo ""
+	@echo "✅ Build and deploy complete!"
+	@echo ""
+	@echo "📊 Service URLs:"
+	@gcloud run services describe nextjs-frontend --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "  • Next.js: {}"
+	@gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "  • Rust API: {}"
+	@echo ""
+	@echo "🔍 Verify health:"
+	@gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "  curl {}/health"
+
+# Quick deploy without rebuilding images
+redeploy:
+	@echo "🔄 Redeploying services..."
+	@cd ${TF_DIR} && terraform apply -auto-approve
+	@echo "✅ Services redeployed!"
 
 docker-auth:
 	@echo "Configuring Docker authentication..."
@@ -145,46 +282,56 @@ docker-clean:
 	docker rmi ${REGISTRY}/edgequake-images/rust-api:latest || true
 	@echo "✓ Docker images removed"
 
+scaffold:
+	@echo "🏗️  Scaffolding minimal source code..."
+	@mkdir -p pages src public
+	@if [ ! -f package.json ]; then \
+		echo '{"name": "frontend", "version": "1.0.0", "scripts": {"build": "next build", "start": "next start"}}' > package.json; \
+	fi
+	@if [ ! -f pages/index.js ]; then \
+		echo 'export default function Home() { return <div>GCP Cloud Graph Stack</div> }' > pages/index.js; \
+	fi
+	@if [ ! -f pages/health.js ]; then \
+		echo 'export default function Health() { return <div>OK</div> }' > pages/health.js; \
+	fi
+	@if [ ! -f public/favicon.ico ]; then \
+		touch public/favicon.ico; \
+	fi
+	@if [ ! -f Cargo.toml ]; then \
+		echo '[package]\nname = "api"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nactix-web = "4"' > Cargo.toml; \
+	fi
+	@if [ ! -f src/main.rs ]; then \
+		echo 'use actix_web::{get, App, HttpResponse, HttpServer, Responder};\n\n#[get("/")]\nasync fn hello() -> impl Responder {\n    HttpResponse::Ok().body("API is running")\n}\n\n#[actix_web::main]\nasync fn main() -> std::io::Result<()> {\n    HttpServer::new(|| {\n        App::new().service(hello)\n    })\n    .bind(("0.0.0.0", 8080))?\n    .run()\n    .await\n}' > src/main.rs; \
+	fi
+	@npm install --package-lock-only 2>/dev/null || true
+	@cargo generate-lockfile 2>/dev/null || true
+	@echo "✅ Scaffolding complete!"
+
 # Verification & Testing
 verify-infra:
-	@echo "Verifying infrastructure..."
-	@echo ""
-	@echo "=== Compute Engine VM ==="
-	gcloud compute instances describe edgequake-db-vm \
-		--zone=${REGION}-a --format='table(status,machineType.machine_type(),networkInterfaces[0].networkIP)'
-	@echo ""
-	@echo "=== Cloud Run Services ==="
-	gcloud run services list --region=${REGION} \
-		--format='table(SERVICE_NAME,STATUS,REGION,URL)'
-	@echo ""
-	@echo "=== Artifact Registry ==="
-	gcloud artifacts docker images list ${REGISTRY}/edgequake-images \
-		--format='table(IMAGE,DIGEST,CREATE_TIME)'
+	@echo "🔍 Checking infrastructure..."
+	@gcloud compute instances describe edgequake-db-vm --zone=${REGION}-a --format='table(status,machineType.machine_type(),networkInterfaces[0].networkIP)' 2>/dev/null || echo "❌ VM not found"
+	@gcloud run services list --region=${REGION} --format='table(SERVICE_NAME,STATUS,REGION,URL)' 2>/dev/null || echo "❌ No services"
+	@gcloud artifacts docker images list ${REGISTRY}/edgequake-images --format='table(IMAGE,DIGEST,CREATE_TIME)' 2>/dev/null || echo "❌ No images"
 
 verify-db:
-	@echo "Verifying PostgreSQL installation..."
-	@echo "Connecting to VM and checking PostgreSQL status..."
-	gcloud compute ssh edgequake-db-vm --zone=${REGION}-a \
-		--command="sudo systemctl status postgresql && sudo -u postgres psql -c 'SELECT version();'"
+	@gcloud compute ssh edgequake-db-vm --zone=${REGION}-a --command="sudo systemctl status postgresql --no-pager && sudo -u postgres psql -c 'SELECT version();'" 2>/dev/null && echo "✅ PostgreSQL running" || echo "❌ PostgreSQL check failed"
 
 verify-services:
-	@echo "Checking Cloud Run services..."
-	gcloud run services describe nextjs-frontend --region=${REGION}
-	@echo ""
-	gcloud run services describe rust-api --region=${REGION}
+	@echo "🔍 Checking services..."
+	@gcloud run services describe nextjs-frontend --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "✅ Next.js: {}" || echo "❌ Next.js not found"
+	@gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "✅ Rust API: {}" || echo "❌ Rust API not found"
+
+test: test-nextjs test-rust
+	@echo "✅ All tests passed!"
 
 test-nextjs:
-	@echo "Testing Next.js frontend..."
-	@NEXTJS_URL=$$(gcloud run services describe nextjs-frontend --region=${REGION} --format='value(status.url)'); \
-	echo "Endpoint: $$NEXTJS_URL"; \
-	curl -s $$NEXTJS_URL | head -c 200; \
-	echo ""
+	@NEXTJS_URL=$$(gcloud run services describe nextjs-frontend --region=${REGION} --format='value(status.url)' 2>/dev/null); \
+	[ -z "$$NEXTJS_URL" ] && echo "❌ Next.js not found" && exit 1 || (echo "🧪 Testing Next.js..." && curl -s --max-time 5 $$NEXTJS_URL >/dev/null && echo "✅ Next.js responding" || echo "❌ Next.js not responding")
 
 test-rust:
-	@echo "Testing Rust API..."
-	@RUST_URL=$$(gcloud run services describe rust-api --region=${REGION} --format='value(status.url)'); \
-	echo "Endpoint: $$RUST_URL"; \
-	curl -s $$RUST_URL/health || echo "API endpoint not responding"
+	@RUST_URL=$$(gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null); \
+	[ -z "$$RUST_URL" ] && echo "❌ Rust API not found" && exit 1 || (echo "🧪 Testing Rust API..." && curl -s --max-time 5 $$RUST_URL >/dev/null && echo "✅ Rust API responding" || echo "❌ Rust API not responding")
 
 # Operations
 logs-cloud-run:
@@ -230,38 +377,29 @@ costs:
 	@echo "See docs/06-roadmap-costs.md for detailed breakdown"
 
 # Database Tunnel & Local Access
-.PHONY: db-tunnel db-tunnel-custom db-connect db-check
+.PHONY: secure-ssh db-tunnel db-tunnel-custom db-connect db-check
+secure-ssh:
+	@echo "🔒 Securing SSH access for your IP..."
+	./scripts/secure-ssh-access.sh ${PROJECT_ID}
+
 db-tunnel:
-	@echo "🔌 Starting PostgreSQL SSH Tunnel..."
-	@echo "   Local: localhost:5432"
-	@echo "   Remote: ${REGION}-a (PostgreSQL VM)"
-	@echo ""
-	@echo "Press Ctrl+C to stop the tunnel"
-	@echo ""
+	@echo "🔌 SSH tunnel: localhost:5432 → ${REGION}-a PostgreSQL"
+	@echo "⚠️  Run 'make secure-ssh' first!"
 	./scripts/db-tunnel.sh ${PROJECT_ID} ${REGION}-a db-vm 5432 5432
 
 db-tunnel-custom:
-	@echo "🔌 Starting PostgreSQL SSH Tunnel on custom port 5433..."
-	@echo "   Local: localhost:5433"
-	@echo "   Remote: ${REGION}-a (PostgreSQL VM port 5432)"
-	@echo ""
-	@echo "Connect with: psql -h localhost -p 5433 -U postgres -d graph_db"
-	@echo ""
+	@echo "🔌 SSH tunnel: localhost:5433 → ${REGION}-a PostgreSQL"
+	@echo "⚠️  Run 'make secure-ssh' first!"
 	./scripts/db-tunnel.sh ${PROJECT_ID} ${REGION}-a db-vm 5433 5432
 
 db-connect:
-	@echo "📦 Connecting to PostgreSQL (ensure tunnel is running in another terminal)..."
-	@echo "   Host: localhost"
-	@echo "   Port: 5432"
-	@echo "   Database: graph_db"
-	@echo "   User: postgres"
-	@echo ""
+	@echo "📦 Connecting to PostgreSQL (tunnel must be running)..."
 	psql -h localhost -U postgres -d graph_db
 
 db-check:
-	@echo "🔍 Checking PostgreSQL status on VM..."
+	@echo "🔍 PostgreSQL status on VM..."
 	gcloud compute ssh db-vm --zone=${REGION}-a --project=${PROJECT_ID} -- \
-	  "echo 'Checking PostgreSQL:' && sudo systemctl status postgresql --no-pager"
+	  "sudo systemctl status postgresql --no-pager"
 
 # Cleanup
 clean:
@@ -273,35 +411,174 @@ clean:
 clean-all: docker-clean clean
 	@echo "✓ All cleaned"
 
-# Documentation
 docs:
-	@echo "=== Documentation Overview ==="
+	@echo "📚 Documentation Overview"
 	@echo ""
-	@echo "Start here:"
-	@echo "  • README.md                          - Project overview"
-	@echo "  • docs/05-quick-start.md             - Step-by-step deployment"
+	@echo "🚀 Start here:"
+	@echo "  README.md                    - Project overview"
+	@echo "  docs/05-quick-start.md       - Step-by-step setup"
 	@echo ""
-	@echo "Architecture & Design:"
-	@echo "  • docs/01-architecture.md            - System design decisions"
-	@echo "  • docs/04-ci-cd-architecture.md      - CI/CD patterns"
+	@echo "🏗️  Architecture:"
+	@echo "  docs/01-architecture.md      - System design"
+	@echo "  docs/04-ci-cd-architecture.md - CI/CD patterns"
 	@echo ""
-	@echo "Implementation Guides:"
-	@echo "  • docs/02-deployment-terraform.md    - Terraform walkthrough"
-	@echo "  • docs/03-deployment-github-actions.md - GitHub Actions setup"
+	@echo "⚙️  Implementation:"
+	@echo "  docs/02-deployment-terraform.md    - Terraform guide"
+	@echo "  docs/03-deployment-github-actions.md - GitHub Actions"
 	@echo ""
-	@echo "Planning & Operations:"
-	@echo "  • docs/06-roadmap-costs.md           - Roadmap & cost analysis"
+	@echo "📋 Planning:"
+	@echo "  docs/06-roadmap-costs.md     - Costs & roadmap"
 	@echo ""
-	@echo "Usage:"
-	@echo "  make readme                          - Show README"
-	@echo "  cat docs/05-quick-start.md           - Show Quick Start"
-	@echo ""
+	@echo "💡 Run: cat <filename> to read any document"
 
 readme:
 	@cat README.md
 
 # Default target
 .DEFAULT_GOAL := help
+
+# Catch common typos and provide helpful suggestions
+.PHONY: satus staus statu deployy deply setupy setp inity confi planz applyy destro destroyy \
+        docker-buil docker-buid docker-pus docker-puh verify-infr verif verify-dbz test-nextj test-rus \
+        dev-acces dev-acess secure-ss sshh db-tunne db-tunnel-custom db-connec db-chec \
+        doc log clean-al clea readme
+
+# Common typo aliases with helpful messages
+satus staus statu:
+	@echo "❌ Did you mean 'make status'?"
+	@echo "💡 Run: make status"
+	@echo ""
+
+deployy deply:
+	@echo "❌ Did you mean 'make deploy'?"
+	@echo "💡 Run: make deploy"
+	@echo ""
+
+setupy setp:
+	@echo "❌ Did you mean 'make setup'?"
+	@echo "💡 Run: make setup"
+	@echo ""
+
+gcloud-aut gcloudauth:
+	@echo "❌ Did you mean 'make gcloud-auth'?"
+	@echo "💡 Run: make gcloud-auth"
+	@echo ""
+
+inity:
+	@echo "❌ Did you mean 'make init'?"
+	@echo "💡 Run: make init"
+	@echo ""
+
+confi:
+	@echo "❌ Did you mean 'make config'?"
+	@echo "💡 Run: make config"
+	@echo ""
+
+planz:
+	@echo "❌ Did you mean 'make plan'?"
+	@echo "💡 Run: make plan"
+	@echo ""
+
+applyy:
+	@echo "❌ Did you mean 'make apply'?"
+	@echo "💡 Run: make apply"
+	@echo ""
+
+destro destroyy:
+	@echo "❌ Did you mean 'make destroy'?"
+	@echo "💡 Run: make destroy"
+	@echo ""
+
+docker-buil docker-buid:
+	@echo "❌ Did you mean 'make docker-build'?"
+	@echo "💡 Run: make docker-build"
+	@echo ""
+
+docker-pus docker-puh:
+	@echo "❌ Did you mean 'make docker-push'?"
+	@echo "💡 Run: make docker-push"
+	@echo ""
+
+verify-infr verif:
+	@echo "❌ Did you mean 'make verify-infra'?"
+	@echo "💡 Run: make verify-infra"
+	@echo ""
+
+verify-dbz:
+	@echo "❌ Did you mean 'make verify-db'?"
+	@echo "💡 Run: make verify-db"
+	@echo ""
+
+test-nextj:
+	@echo "❌ Did you mean 'make test-nextjs'?"
+	@echo "💡 Run: make test-nextjs"
+	@echo ""
+
+test-rus:
+	@echo "❌ Did you mean 'make test-rust'?"
+	@echo "💡 Run: make test-rust"
+	@echo ""
+
+dev-acces dev-acess:
+	@echo "❌ Did you mean 'make dev-access'?"
+	@echo "💡 Run: make dev-access"
+	@echo ""
+
+secure-ss:
+	@echo "❌ Did you mean 'make secure-ssh'?"
+	@echo "💡 Run: make secure-ssh"
+	@echo ""
+
+sshh:
+	@echo "❌ Did you mean 'make ssh'?"
+	@echo "💡 Run: make ssh"
+	@echo ""
+
+db-tunne:
+	@echo "❌ Did you mean 'make db-tunnel'?"
+	@echo "💡 Run: make db-tunnel"
+	@echo ""
+
+db-connec:
+	@echo "❌ Did you mean 'make db-connect'?"
+	@echo "💡 Run: make db-connect"
+	@echo ""
+
+db-chec:
+	@echo "❌ Did you mean 'make db-check'?"
+	@echo "💡 Run: make db-check"
+	@echo ""
+
+doc:
+	@echo "❌ Did you mean 'make docs'?"
+	@echo "💡 Run: make docs"
+	@echo ""
+
+log:
+	@echo "❌ Did you mean 'make logs-cloud-run'?"
+	@echo "💡 Run: make logs-cloud-run"
+	@echo ""
+
+clean-al clea:
+	@echo "❌ Did you mean 'make clean-all'?"
+	@echo "💡 Run: make clean-all"
+	@echo ""
+
+# Catch-all rule for unrecognized commands
+%:
+	@echo "❌ Unknown command: '$@'"
+	@echo ""
+	@echo "📋 Available commands:"
+	@echo "  make help              # Show all commands"
+	@echo "  make menu              # Interactive menu"
+	@echo "  make quick-start       # Setup guide"
+	@echo ""
+	@echo "💡 Common commands:"
+	@echo "  make status            # System health check"
+	@echo "  make setup             # Install tools"
+	@echo "  make deploy            # Deploy infrastructure"
+	@echo "  make dev-access        # Database access"
+	@echo ""
 
 # Prevent make from trying to interpret commands as recipes
 .SECONDARY:

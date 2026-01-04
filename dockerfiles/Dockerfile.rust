@@ -1,13 +1,13 @@
 # Multi-stage build for Rust API
 # Stage 1: Build
-FROM rust:1.75-alpine AS builder
+FROM rust:alpine AS builder
 
 WORKDIR /app
 
 # Install build dependencies
 RUN apk add --no-cache \
     musl-dev \
-    pkg-config \
+    pkgconf \
     openssl-dev \
     postgresql-dev
 

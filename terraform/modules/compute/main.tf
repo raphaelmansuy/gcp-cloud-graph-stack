@@ -207,6 +207,15 @@ resource "google_compute_disk_resource_policy_attachment" "data_disk_attachment"
   zone = "${var.region}-a"
 }
 
+
+# Reserve a static internal IP for the DB VM
+resource "google_compute_address" "db_vm_internal" {
+  name         = "${var.app_name}-db-vm-ip"
+  subnetwork   = var.vpc_subnet_name
+  address_type = "INTERNAL"
+  region       = var.region
+}
+
 # Compute Instance - Database VM
 resource "google_compute_instance" "db_vm" {
   name         = "${var.app_name}-db-vm"
@@ -235,6 +244,7 @@ resource "google_compute_instance" "db_vm" {
     network            = var.vpc_network_name
     subnetwork         = var.vpc_subnet_name
     subnetwork_project = var.project_id
+    network_ip         = google_compute_address.db_vm_internal.address
 
     access_config {
       # Ephemeral public IP for initial setup; can be removed after
@@ -259,18 +269,18 @@ resource "google_compute_instance" "db_vm" {
   }
 
   # Startup script: install PostgreSQL, AGE, pgvector
-  metadata_startup_script = base64encode(templatefile("${path.module}/startup-script.sh", {
+  metadata_startup_script = templatefile("${path.module}/startup-script.sh", {
     postgresql_version   = var.postgresql_version
     db_port              = var.db_port
     gcs_backup_bucket    = var.gcs_backup_bucket
     enable_wal_archiving = var.enable_wal_archiving
 
-    # Data disk info for startup script
-    data_disk_name       = "${var.app_name}-data-disk"
+    # Data disk info for startup script - use device_name to match attached_disk
+    data_disk_name       = var.data_disk_device_name
     data_disk_mount_point = var.data_disk_mount_point
     data_disk_device_name = var.data_disk_device_name
     create_data_disk      = var.create_data_disk
-  }))
+  })
 
   depends_on = [google_service_account.vm_sa]
 }

@@ -107,7 +107,7 @@ module "cloud_run_nextjs" {
 
   environment_variables = {
     "NODE_ENV" = var.environment
-    "API_URL"  = "http://${module.cloud_run_rust_api.service_uri}"
+    "NEXT_PUBLIC_API_URL" = module.cloud_run_rust_api.service_uri
   }
   service_account_name = google_service_account.cloud_run_sa.email
 
@@ -137,9 +137,11 @@ module "cloud_run_rust_api" {
   labels                = var.labels
 
   environment_variables = {
-    "DATABASE_HOST" = module.compute.vm_private_ip
-    "DATABASE_PORT" = tostring(var.db_port)
-    "DATABASE_NAME" = "graph_db"
+    "DATABASE_HOST"     = module.compute.vm_private_ip
+    "DATABASE_PORT"     = tostring(var.db_port)
+    "DATABASE_NAME"     = "graph_db"
+    "DATABASE_USER"     = "postgres"
+    "DATABASE_PASSWORD" = "postgres"
   }
   service_account_name = google_service_account.cloud_run_sa.email
 

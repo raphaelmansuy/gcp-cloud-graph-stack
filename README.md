@@ -8,94 +8,185 @@ This repository contains a **production-ready infrastructure and CI/CD setup** f
 - **Terraform** for Infrastructure as Code (IaC)
 - **Docker** for containerization (Next.js + Rust)
 - **GitHub Actions** or **Cloud Build** for CI/CD
-- **PostgreSQL 16** with AGE (graph) and pgvector (embeddings)
+- **PostgreSQL 16** with AGE (graph) and pgvector (embeddings) on Compute Engine
 - **Cloud Run** for serverless container deployment
-- **Compute Engine** for managed PostgreSQL
 
 **Project ID**: `saas-app-001` (US-central1 region)
 
 ---
 
-## ⚠️ Important Security Notice
+## ⚡ Quick Start (Actionable, 10–30 minutes)
 
-### Database Access Solution Update
+Use these compact, repeatable steps to get a working stack quickly. The `Makefile` automates most tasks, and `make build-and-deploy` will build images with the correct API URL and update Cloud Run via Terraform.
 
-**The SSH port forwarding solution for database access violates GCP security best practices** and is **not recommended for production use**.
+1) Prepare your environment
 
-**Official GCP Recommendation**: Use **Cloud SQL Auth Proxy** for accessing Cloud SQL instances in private networks.
+```bash
+# Configure project and authenticate
+gcloud config set project saas-app-001
+gcloud auth login
+gcloud auth configure-docker us-central1-docker.pkg.dev
 
-**Current Status**: 
-- ❌ SSH tunneling implemented (functional but insecure)
-- ✅ **Challenge documented**: [SSH_TUNNEL_CHALLENGE.md](SSH_TUNNEL_CHALLENGE.md)
-- 🔄 **Migration needed**: Replace SSH tunnel with Cloud SQL Auth Proxy
+# Copy and edit tfvars
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+# Edit terraform/terraform.tfvars (project, images, network settings if needed)
+```
 
-**Action Required**: Review [SSH_TUNNEL_CHALLENGE.md](SSH_TUNNEL_CHALLENGE.md) and migrate to Cloud SQL Auth Proxy for production deployments.
+2) Deploy infrastructure (one-off)
+
+```bash
+# Initialize and apply Terraform (from repo root)
+cd terraform
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+3) Build & deploy apps (fast path)
+
+```bash
+# From repo root - builds multi-arch images, pushes, updates Cloud Run via Terraform
+make build-and-deploy
+```
+
+4) Verify
+
+```bash
+# Rust API health
+curl -s https://rust-api-wszhkynzxa-uc.a.run.app/health | jq .
+
+# Next.js health page
+open https://nextjs-frontend-wszhkynzxa-uc.a.run.app/health
+```
+
+Quick reference of useful Make targets:
+- `make full-setup`  : Run setup, scaffold, deploy (all-in-one)
+- `make docker-build`: Build and push images (Next.js will be built with the detected Rust API URL)
+- `make build-and-deploy`: Build images and apply Terraform updates (recommended)
 
 ---
 
-## Quick Navigation
+## Architecture Diagram (High-level)
 
-### 🚀 Start Here
+A compact ASCII diagram showing runtime networking and flow:
 
-1. **[Quick Start Guide](./05-quick-start.md)** (30 minutes)
-   - Step-by-step instructions to deploy everything
-   - Two paths: Terraform + GitHub Actions OR Cloud Build
-   - Verification checklist
+```
+    Users
+     (browser)
+       |
+       |  HTTPS
+       v
+  +-----------------+
+  | Next.js Frontend|  (Cloud Run)
+  +-----------------+
+           |
+           | NEXT_PUBLIC_API_URL
+           v
+     +-------------+
+     | Rust API    |  (Cloud Run)
+     +-------------+
+           |
+           | VPC Connector (edgequake-vpc-connector)
+           v
+  +------------------------+
+  | Compute Engine VM      |
+  | - Postgres (Docker)    |
+  | - Persistent Disk (/mnt/data)
+  +------------------------+
+```
 
-### 📚 Understanding the Architecture
+## CI/CD Flow (ASCII)
 
-2. **[Architecture Overview](./01-architecture.md)** (5 minutes)
-   - System design decisions
-   - Why PostgreSQL vs Cloud SQL
-   - Why self-managed vs managed options
-   - Network design (Direct VPC egress)
+```
+GitHub Actions / Cloud Build
+        |
+        v
+  build images -> push to Artifact Registry
+        |
+        v
+  terraform plan & apply -> Cloud Run update
+```
 
-3. **[CI/CD Architecture](./04-ci-cd-architecture.md)** (10 minutes)
-   - End-to-end CI/CD flow with ASCII diagrams
-   - Terraform vs Cloud Build comparison
-   - Multi-environment setup (dev/staging/prod)
-   - Monitoring and rollback procedures
+---
 
-### 🛠️ Implementation Guides
+## Quick Troubleshooting
 
-4. **[Terraform Deployment Guide](./02-deployment-terraform.md)** (20 minutes)
-   - Complete Terraform walkthrough
-   - Module structure explained
-   - Database setup and verification
-   - WAL archiving and backups
-   - Troubleshooting
+- Next.js shows "Loading..." or "NO_DATABASE":
+  1. Check Rust API health: `curl https://rust-api-*/health | jq .` (should be status "ok")
+  2. If Rust API shows `no_database`, restart it to force a new revision:
+     ```bash
+     gcloud run services update rust-api --region=us-central1 --update-env-vars="RESTART_TOKEN=$(date +%s)"
+     ```
+  3. If Next.js still shows stale content, rebuild Next.js with the correct API URL and redeploy:
+     ```bash
+     make docker-build && cd terraform && terraform apply -auto-approve
+     ```
 
-5. **[GitHub Actions Setup](./03-deployment-github-actions.md)** (30 minutes)
-   - Workload Identity Federation configuration
-   - GitHub secrets setup
-   - Workflow monitoring and logs
-   - Manual testing with Act
-   - Best practices and rollback
+- Important: Next.js must be *built* with the correct `NEXT_PUBLIC_API_URL` (we pass that during `make docker-build`). Local dev: `NEXT_PUBLIC_API_URL=http://localhost:8080 npm run dev`.
 
-### 📊 Planning & Operations
+---
 
-6. **[Roadmap & Cost Analysis](./06-roadmap-costs.md)** (15 minutes)
-   - 12-week development roadmap (MVP → Production → Scale)
-   - Detailed cost breakdown (dev vs production)
-   - Cost optimization strategies
-   - ROI analysis for different scenarios
-   - Production readiness checklist
 
-### 🔒 Security & Compliance
 
-7. **[SSH Tunnel Security Challenge](./SSH_TUNNEL_CHALLENGE.md)** (10 minutes)
-   - Analysis of SSH tunneling vs GCP best practices
-   - Official GCP recommendations for database access
-   - Migration path to Cloud SQL Auth Proxy
-   - Security implications and compliance considerations
+## ⚠️ Security Notice
 
+**SSH tunneling is required for AGE support** (Cloud SQL incompatible). Run `./scripts/secure-ssh-access.sh` to restrict SSH access to your current IP only.
+
+---
+
+## Essential Links (concise)
+
+- Quick Start (30m): ./05-quick-start.md — deploy everything with Terraform and Make
+- Architecture (5m): ./01-architecture.md — network and design rationale
+- Terraform Guide (20m): ./02-deployment-terraform.md — IaC walkthrough
+- CI/CD (10m): ./04-ci-cd-architecture.md — build & deploy flow
+- Security (10m): ./SSH_TUNNEL_CHALLENGE.md — SSH tunneling for AGE
+
+---
+
+## Makefile (core developer commands)
+
+A short reference for the most-used targets:
+
+| Target | Purpose |
+|--------|---------|
+| `make help` | Show cli menu and quick commands |
+| `make init` | Initialize Terraform & tooling |
+| `make full-setup` | Run setup, scaffold, deploy (end-to-end) |
+| `make docker-build` | Build & push multi-arch images (Next.js reads API URL at build) |
+| `make build-and-deploy` | Build images, push, plan/apply Terraform (recommended) |
+| `make deploy` | Apply the last `tfplan` generated by `make plan` |
+| `make status` | Quick system status checks (Cloud Run, VMs, images) |
+| `make verify-db` | Quick remote DB check (psql/pg_isready via VM) |
+
+Tip: `make build-and-deploy` performs the full delivery loop (build → push → terraform apply) and is the recommended single-command deploy for dev and staging.
+
+---
+
+## Daily Verification Checklist
+
+- Cloud Run services responding (Next.js + Rust API)
+- Rust API `/health` returns `status: "ok"` and `database.connected: true`
+- Persistent disk mounted on DB VM (`/mnt/data`)
+- PostgreSQL running and extensions present (`pgvector`, `age`)
+
+If something is off, see Quick Troubleshooting above.
+
+---
+
+## 🔒 Security & Compliance
+
+7. **[SSH Tunnel Security Resolution](./SSH_TUNNEL_CHALLENGE.md)** (10 minutes)
+   - Why SSH tunneling is required for AGE support
+   - Security hardening with single-IP authorization
+   - Implementation guide for secure database access
 ---
 
 ## File Structure
 
 ```
 gcp-cloud-graph-stack/
-├── docs/
+├── docs/                                      # Core documentation (14 files)
 │   ├── 01-architecture.md                    # System design & decisions
 │   ├── 02-deployment-terraform.md            # Terraform walkthrough
 │   ├── 03-deployment-github-actions.md       # GitHub Actions setup
@@ -109,8 +200,7 @@ gcp-cloud-graph-stack/
 │   ├── 11-edgequake-integration-summary.md   # Integration summary
 │   ├── 13-pre-deployment-terraform-checklist.md # Pre-deployment checklist
 │   ├── 14-terraform-status-and-updates.md    # Terraform status analysis
-│   ├── 15-edgequake-deployment-ready.md      # Deployment ready guide
-│   └── README.md                             # This file
+│   └── 15-edgequake-deployment-ready.md      # Deployment ready guide
 │
 ├── archive/                                  # Archived redundant documents
 │   ├── docs/12-documentation-index.md        # Superseded by README
@@ -123,30 +213,40 @@ gcp-cloud-graph-stack/
 │   ├── DEPLOYMENT-CHECKLIST.md               # Superseded by docs/13
 │   ├── DEPLOYMENT_READY.md                   # Superseded by docs/15
 │   ├── INDEX.md                              # Superseded by README
-│   └── READING-ORDER.md                      # Superseded by README
+│   ├── READING-ORDER.md                      # Superseded by README
+│   └── README.md                             # Archive documentation
 │
-├── terraform/
+├── terraform/                                # Infrastructure as Code
 │   ├── main.tf                               # Root configuration
-│   ├── main.tf                            # Root configuration
-│   ├── variables.tf                       # Input variables (40+)
-│   ├── outputs.tf                         # Exported values
-│   ├── terraform.tfvars.example           # Template (copy to .tfvars)
+│   ├── variables.tf                          # Input variables (40+)
+│   ├── outputs.tf                            # Exported values
+│   ├── terraform.tfvars.example              # Template (copy to .tfvars)
 │   └── modules/
-│       ├── vpc/main.tf                    # VPC, subnets, firewall
-│       ├── compute/main.tf                # PostgreSQL VM
-│       ├── compute/startup-script.sh      # PostgreSQL bootstrap
-│       └── cloud_run/main.tf              # Cloud Run module
+│       ├── vpc/main.tf                       # VPC, subnets, firewall
+│       ├── compute/main.tf                   # PostgreSQL VM + disk + snapshots
+│       ├── compute/startup-script.sh         # PostgreSQL bootstrap script
+│       └── cloud_run/main.tf                 # Cloud Run services
 │
-├── dockerfiles/
-│   ├── Dockerfile.nextjs                  # Next.js multi-stage build
-│   └── Dockerfile.rust                    # Rust Axum multi-stage build
+├── scripts/                                  # Helper scripts
+│   ├── bootstrap-backend.sh                  # GCS backend setup
+│   ├── db-tunnel.sh                          # SSH tunnel (deprecated)
+│   └── secure-ssh-access.sh                  # Single-IP SSH authorization
 │
-├── .github/workflows/
-│   └── deploy.yml                         # GitHub Actions CI/CD
+├── dockerfiles/                              # Container definitions
+│   ├── Dockerfile.nextjs                     # Next.js multi-stage build
+│   └── Dockerfile.rust                       # Rust Axum multi-stage build
 │
-├── cloudbuild.yaml                        # Cloud Build alternative
+├── .github/workflows/                        # GitHub Actions CI/CD
+│   ├── deploy.yml                            # Deployment workflow
+│   └── security-gitleaks.yml                 # Security scanning workflow
 │
-└── README.md (in root)                    # GitHub repository README
+├── logs/                                     # Session logs
+│   └── [date]-beastmode-*.md                 # Development session logs
+│
+├── cloudbuild.yaml                           # Cloud Build alternative
+├── Makefile                                  # Convenience commands
+├── README.md                                 # This file
+└── SSH_TUNNEL_CHALLENGE.md                   # Security analysis
 ```
 
 ---
@@ -186,7 +286,7 @@ terraform apply tfplan
 # 5. Build and push Docker images
 docker build -t us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest \
   -f dockerfiles/Dockerfile.nextjs .
-  docker push us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest
+docker push us-central1-docker.pkg.dev/saas-app-001/edgequake-images/nextjs:latest
 # (repeat for Rust image)
 
 # 6. Deploy to Cloud Run

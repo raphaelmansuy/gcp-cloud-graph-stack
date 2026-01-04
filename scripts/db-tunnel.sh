@@ -1,5 +1,10 @@
 #!/bin/bash
 # SSH Tunnel Script for PostgreSQL Database Access
+# ⚠️ DEPRECATED: Use ./scripts/secure-ssh-access.sh for secure SSH access
+#
+# This script creates SSH tunnels but does NOT address security concerns.
+# Before using, run: ./scripts/secure-ssh-access.sh
+#
 # Usage: ./scripts/db-tunnel.sh [PROJECT_ID] [ZONE] [VM_NAME] [LOCAL_PORT] [REMOTE_PORT]
 #
 # Examples:

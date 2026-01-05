@@ -113,9 +113,9 @@ variable "snapshot_storage_locations" {
 }
 
 variable "use_spot_vm" {
-  description = "Whether to use a Spot (preemptible) VM for the database VM"
+  description = "Whether to use a Spot (preemptible) VM for the database VM. For production, set to false to ensure reliability."
   type        = bool
-  default     = true
+  default     = false  # Changed from true - use standard VM for database reliability
 }
 
 # Service account for VM

@@ -71,9 +71,9 @@ variable "cloud_run_memory" {
 }
 
 variable "cloud_run_cpu" {
-  description = "Cloud Run CPU (e.g., '0.25', '1')"
+  description = "Cloud Run CPU (e.g., '1', '2'). Must be >= 1 when concurrency > 1"
   type        = string
-  default     = "0.25"
+  default     = "1"
 }
 
 variable "cloud_run_min_instances" {

@@ -133,15 +133,20 @@ module "cloud_run_rust_api" {
   vpc_subnet_name       = module.vpc.subnet_name
   enable_direct_egress  = var.enable_direct_vpc_egress
   vpc_connector_name    = !var.enable_direct_vpc_egress ? module.vpc.vpc_connector_name : null
-  allow_unauthenticated = false
+  allow_unauthenticated = true  # Allow public access for browser-based WebUI
   labels                = var.labels
 
   environment_variables = {
-    "DATABASE_HOST"     = module.compute.vm_private_ip
-    "DATABASE_PORT"     = tostring(var.db_port)
-    "DATABASE_NAME"     = "graph_db"
-    "DATABASE_USER"     = "postgres"
-    "DATABASE_PASSWORD" = "postgres"
+    # Database connection with optimized pool settings for Cloud Run
+    # - connect_timeout: Allow 30s for cold start connection (VPC connector warmup)
+    # - keepalives: Enable TCP keepalives to detect dead connections
+    # - keepalives_idle: Start keepalives after 30s of idle
+    # - keepalives_interval: Send keepalive every 10s
+    # - keepalives_count: Fail after 3 missed keepalives
+    "DATABASE_URL"      = "postgresql://postgres:postgres@${module.compute.vm_private_ip}:${var.db_port}/graph_db?connect_timeout=30&keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=3"
+    "RUST_LOG"          = "info,edgequake=debug"
+    "OPENAI_API_KEY"    = var.openai_api_key
+    "ENVIRONMENT"       = var.environment
   }
   service_account_name = google_service_account.cloud_run_sa.email
 

@@ -110,3 +110,37 @@ output "subnet_id" {
 output "vpc_connector_name" {
   value = !var.enable_direct_egress ? google_vpc_access_connector.vpc_connector[0].name : null
 }
+
+# Cloud Router for Cloud NAT
+resource "google_compute_router" "router" {
+  name    = "${var.app_name}-router"
+  region  = var.region
+  network = google_compute_network.vpc.id
+
+  bgp {
+    asn = 64514
+  }
+}
+
+# Cloud NAT for internet egress from VPC
+# This enables Cloud Run (via VPC connector) to reach external APIs like OpenAI
+resource "google_compute_router_nat" "nat" {
+  name                               = "${var.app_name}-nat"
+  router                             = google_compute_router.router.name
+  region                             = var.region
+  nat_ip_allocate_option             = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+
+  log_config {
+    enable = true
+    filter = "ERRORS_ONLY"
+  }
+}
+
+output "router_name" {
+  value = google_compute_router.router.name
+}
+
+output "nat_name" {
+  value = google_compute_router_nat.nat.name
+}

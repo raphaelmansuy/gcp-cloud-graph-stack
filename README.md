@@ -71,29 +71,42 @@ Quick reference of useful Make targets:
 A compact ASCII diagram showing runtime networking and flow:
 
 ```
-    Users
-     (browser)
-       |
-       |  HTTPS
-       v
-  +-----------------+
-  | Next.js Frontend|  (Cloud Run)
-  +-----------------+
-           |
+    Users + External APIs (OpenAI)
+     (browser)           |
+       |                 |
+       |  HTTPS          |  HTTPS
+       v                 |
+  +-----------------+    |
+  | Next.js Frontend|    |  (Cloud Run)
+  +-----------------+    |
+           |             |
            | NEXT_PUBLIC_API_URL
-           v
-     +-------------+
-     | Rust API    |  (Cloud Run)
-     +-------------+
+           v             v
+     +-------------------+
+     | Rust API          |  (Cloud Run)
+     +-------------------+
            |
            | VPC Connector (edgequake-vpc-connector)
+           v
+  +---------------------------+
+  | VPC Network (10.0.0.0/16) |
+  |   - Cloud NAT (Internet)  |  ← Enables OpenAI API access
+  |   - Private Subnet        |
+  +---------------------------+
+           |
            v
   +------------------------+
   | Compute Engine VM      |
   | - Postgres (Docker)    |
-  | - Persistent Disk (/mnt/data)
+  | - IP: 10.0.0.12        |
+  | - Disk: /mnt/data      |
   +------------------------+
 ```
+
+**Why Cloud NAT?** 
+- VPC Connector routes ALL traffic through private VPC
+- Cloud NAT provides internet egress for external APIs (OpenAI)
+- Database remains private (10.0.0.12 - no public IP)
 
 ## CI/CD Flow (ASCII)
 
@@ -176,17 +189,54 @@ If something is off, see Quick Troubleshooting above.
 
 ## 🔒 Security & Compliance
 
-7. **[SSH Tunnel Security Resolution](./SSH_TUNNEL_CHALLENGE.md)** (10 minutes)
+1. **[SSH Tunnel Security Resolution](./SSH_TUNNEL_CHALLENGE.md)** (10 minutes)
    - Why SSH tunneling is required for AGE support
    - Security hardening with single-IP authorization
    - Implementation guide for secure database access
+
+2. **[Security Checklist](docs/25-security-checklist.md)** ⭐ NEW
+   - Comprehensive security audit and validation
+   - Network security architecture diagrams
+   - Firewall rules and access control review
+   - Secret management best practices
+   - Pre-production security checklist
+
+3. **[Security Verification Report](docs/22-security-verification-report.md)**
+   - Current deployment security status
+   - Access control matrix
+   - Compliance verification
+
+## 📦 EdgeQuake RAG System
+
+4. **[EdgeQuake Deployment Complete Guide](docs/16-edgequake-deployment-complete-guide.md)** ⭐ COMPREHENSIVE
+   - Complete territory map of edgequake and infrastructure repos
+   - Three deployment strategies (Direct Build, Submodules, Separate CI/CD)
+   - Architecture diagrams and data flow
+   - Configuration reference and cost estimates
+
+5. **[EdgeQuake Quick Start](docs/17-edgequake-quick-start.md)** ⭐ QUICK START
+   - Deploy EdgeQuake RAG system in 15 minutes
+   - Step-by-step build and deployment guide
+   - Troubleshooting common issues
+   - Monitoring and updates
+
+6. **[EdgeQuake Environment Configuration](docs/18-edgequake-environment-config.md)** ⭐ REFERENCE
+   - Complete environment variables reference
+   - Secrets management with Google Secret Manager
+   - Local development setup
+   - Production configuration templates
+
+7. **[OODA Loop Summary](docs/24-ooda-loop-summary.md)**
+   - Structured debugging methodology
+   - Query functionality fix walkthrough
+
 ---
 
 ## File Structure
 
 ```
 gcp-cloud-graph-stack/
-├── docs/                                      # Core documentation (14 files)
+├── docs/                                      # Core documentation (17 files)
 │   ├── 01-architecture.md                    # System design & decisions
 │   ├── 02-deployment-terraform.md            # Terraform walkthrough
 │   ├── 03-deployment-github-actions.md       # GitHub Actions setup
@@ -200,7 +250,10 @@ gcp-cloud-graph-stack/
 │   ├── 11-edgequake-integration-summary.md   # Integration summary
 │   ├── 13-pre-deployment-terraform-checklist.md # Pre-deployment checklist
 │   ├── 14-terraform-status-and-updates.md    # Terraform status analysis
-│   └── 15-edgequake-deployment-ready.md      # Deployment ready guide
+│   ├── 15-edgequake-deployment-ready.md      # Deployment ready guide
+│   ├── 16-edgequake-deployment-complete-guide.md # Complete EdgeQuake guide ⭐
+│   ├── 17-edgequake-quick-start.md          # EdgeQuake quick start ⭐
+│   └── 18-edgequake-environment-config.md   # Environment config reference ⭐
 │
 ├── archive/                                  # Archived redundant documents
 │   ├── docs/12-documentation-index.md        # Superseded by README
@@ -233,8 +286,10 @@ gcp-cloud-graph-stack/
 │   └── secure-ssh-access.sh                  # Single-IP SSH authorization
 │
 ├── dockerfiles/                              # Container definitions
-│   ├── Dockerfile.nextjs                     # Next.js multi-stage build
-│   └── Dockerfile.rust                       # Rust Axum multi-stage build
+│   ├── Dockerfile.nextjs                     # Next.js multi-stage build (generic)
+│   ├── Dockerfile.rust                       # Rust Axum multi-stage build (generic)
+│   ├── Dockerfile.edgequake-api             # EdgeQuake Rust API ⭐
+│   └── Dockerfile.edgequake-webui           # EdgeQuake Next.js WebUI ⭐
 │
 ├── .github/workflows/                        # GitHub Actions CI/CD
 │   ├── deploy.yml                            # Deployment workflow
@@ -244,7 +299,7 @@ gcp-cloud-graph-stack/
 │   └── [date]-beastmode-*.md                 # Development session logs
 │
 ├── cloudbuild.yaml                           # Cloud Build alternative
-├── Makefile                                  # Convenience commands
+├── Makefile                                  # Convenience commands (with EdgeQuake targets ⭐)
 ├── README.md                                 # This file
 └── SSH_TUNNEL_CHALLENGE.md                   # Security analysis
 ```

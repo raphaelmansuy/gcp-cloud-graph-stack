@@ -1,0 +1,122 @@
+# EdgeQuake API Dockerfile
+# Multi-stage build for production-optimized Rust application with PostgreSQL support
+#
+# Features:
+# - Multi-stage build to minimize image size
+# - Cargo chef for dependency caching
+# - Strip symbols for smaller binary
+# - Non-root user for security
+# - Health check endpoint
+# - PostgreSQL client libraries
+
+# ============================================
+# Stage 1: Planner - Analyze dependencies
+# ============================================
+FROM rust:1.83-bookworm AS planner
+
+WORKDIR /app
+
+# Install cargo-chef for dependency caching
+RUN cargo install cargo-chef
+
+# Copy all source files
+COPY . .
+
+# Generate recipe for dependency caching
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ============================================
+# Stage 2: Cacher - Build dependencies
+# ============================================
+FROM rust:1.83-bookworm AS cacher
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-chef
+RUN cargo install cargo-chef
+
+# Copy recipe from planner
+COPY --from=planner /app/recipe.json recipe.json
+
+# Build dependencies (cached layer)
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# ============================================
+# Stage 3: Builder - Build application
+# ============================================
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy cached dependencies from cacher
+COPY --from=cacher /app/target target
+COPY --from=cacher /usr/local/cargo /usr/local/cargo
+
+# Copy source code
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY src/ src/
+COPY migrations/ migrations/
+
+# Build release binary with optimizations
+RUN cargo build --release --locked --features postgres
+
+# Strip symbols to reduce binary size
+RUN strip target/release/edgequake
+
+# ============================================
+# Stage 4: Runtime - Minimal runtime image
+# ============================================
+FROM debian:bookworm-slim AS runtime
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -r -s /bin/false -u 1001 edgequake
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/edgequake /usr/local/bin/edgequake
+
+# Copy migrations if needed
+COPY --from=builder /app/migrations /app/migrations
+
+# Set ownership
+RUN chown -R edgequake:edgequake /app /usr/local/bin/edgequake
+
+# Switch to non-root user
+USER edgequake
+
+# Expose API port
+EXPOSE 8080
+
+# Environment defaults (overridden by Cloud Run)
+ENV HOST=0.0.0.0
+ENV PORT=8080
+ENV RUST_LOG=info
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run the server
+ENTRYPOINT ["edgequake"]

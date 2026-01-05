@@ -1,0 +1,65 @@
+# EdgeQuake API Dockerfile - Simplified build without cargo-chef
+# Multi-stage build for production-optimized Rust application with PostgreSQL support
+# Build context should be /Users/raphaelmansuy/Github/03-working (parent of both edgequake/ and lopdf/)
+
+# ============================================
+# Stage 1: Builder - Build application
+# ============================================
+FROM rust:bookworm AS builder
+
+WORKDIR /workspace
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy both edgequake and lopdf directories
+COPY edgequake ./edgequake
+COPY lopdf ./edgequake/lopdf
+
+# Change to edgequake directory for build
+WORKDIR /workspace/edgequake/edgequake
+
+# Build the application
+RUN cargo build --release
+
+# Strip the binary to reduce size
+RUN strip target/release/edgequake || true
+
+# ============================================
+# Stage 2: Runtime - Minimal runtime image
+# ============================================
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -r -s /bin/false -u 1001 edgequake
+
+# Copy binary from builder (note: binary is in /workspace/edgequake/edgequake/target/release/)
+COPY --from=builder /workspace/edgequake/edgequake/target/release/edgequake /app/edgequake
+
+# Change ownership
+RUN chown -R edgequake:edgequake /app
+
+# Switch to non-root user
+USER edgequake
+
+# Expose port (adjust based on your app)
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run the application
+CMD ["/app/edgequake"]

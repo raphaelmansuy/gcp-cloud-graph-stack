@@ -85,11 +85,8 @@ resource "google_cloud_run_service" "service" {
           }
         }
 
-        env {
-          name  = "ENVIRONMENT"
-          value = "production"
-        }
-
+        # Environment variables are now passed via environment_variables map
+        # No hardcoded ENVIRONMENT variable to avoid duplication
         dynamic "env" {
           for_each = var.environment_variables
           content {
@@ -108,6 +105,8 @@ resource "google_cloud_run_service" "service" {
     metadata {
       annotations = var.enable_direct_egress ? {} : {
         "run.googleapis.com/vpc-access-connector" = var.vpc_connector_name
+        # Use all-traffic to route both internal (Postgres) and external (OpenAI) traffic
+        # through VPC connector. Cloud NAT is configured to provide internet egress.
         "run.googleapis.com/vpc-access-egress"    = "all-traffic"
       }
 

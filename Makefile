@@ -24,6 +24,11 @@ help:
 	@echo "  make full-setup        # Auto setup everything"
 	@echo "  make build-and-deploy  # Build images & deploy"
 	@echo ""
+	@echo "⚡ EDGEQUAKE (RAG + Knowledge Graph):"
+	@echo "  make edgequake-full    # Build, push & deploy EdgeQuake"
+	@echo "  make edgequake-help    # EdgeQuake commands"
+	@echo "  make edgequake-status  # Check EdgeQuake services"
+	@echo ""
 	@echo "📋 WORKFLOWS:"
 	@echo "  make status            # System health check"
 	@echo "  make deploy            # Safe infrastructure deploy"
@@ -276,7 +281,7 @@ docker-auth:
 	@echo "Configuring Docker authentication..."
 	gcloud auth configure-docker ${REGION}-docker.pkg.dev
 
-docker-clean:
+docker-clean-old:
 	@echo "Removing local Docker images..."
 	docker rmi ${REGISTRY}/edgequake-images/nextjs:latest || true
 	docker rmi ${REGISTRY}/edgequake-images/rust-api:latest || true
@@ -548,6 +553,287 @@ db-chec:
 	@echo "❌ Did you mean 'make db-check'?"
 	@echo "💡 Run: make db-check"
 	@echo ""
+
+# ============================================
+# EdgeQuake Deployment Targets
+# ============================================
+
+# EdgeQuake repository location (adjust if needed)
+EDGEQUAKE_REPO := /Users/raphaelmansuy/Github/03-working/edgequake
+EDGEQUAKE_API_DIR := $(EDGEQUAKE_REPO)/edgequake
+EDGEQUAKE_WEBUI_DIR := $(EDGEQUAKE_REPO)/edgequake_webui
+EDGEQUAKE_REGISTRY := $(REGISTRY)/edgequake-images
+EDGEQUAKE_PLATFORMS := linux/amd64,linux/arm64
+
+.PHONY: edgequake-check edgequake-build edgequake-build-api edgequake-build-webui \
+        edgequake-push edgequake-push-api edgequake-push-webui \
+        edgequake-deploy edgequake-full edgequake-status edgequake-logs \
+        edgequake-help edgequake-clean docker-clean
+
+edgequake-help:
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│              EdgeQuake Deployment Commands                   │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "🚀 QUICK START:"
+	@echo "  make edgequake-full        # Build, push, and deploy everything"
+	@echo "  make edgequake-status      # Check deployment status"
+	@echo "" (Multi-arch: amd64 + arm64):"
+	@echo "  make edgequake-build       # Build both API and WebUI images"
+	@echo "  make edgequake-build-api   # Build API image only"
+	@echo "  make edgequake-build-webui # Build WebUI image only"
+	@echo ""
+	@echo "📤 PUSH:"
+	@echo "  make edgequake-push        # Push both images to Artifact Registry"
+	@echo "  make edgequake-push-api    # Push API image only"
+	@echo "  make edgequake-push-webui  # Push WebUI image only"
+	@echo ""
+	@echo "🚢 DEPLOY:"
+	@echo "  make edgequake-deploy      # Deploy to Cloud Run via Terraform"
+	@echo ""
+	@echo "🧹 CLEANUP:"
+	@echo "  make docker-clean          # Clean Docker cache and volumes"
+	@echo "  make edgequake-clean       # Clean EdgeQuake images"
+	@echo ""
+	@echo "📊 MONITORING:"
+	@echo "  make edgequake-status      # Show service URLs and status"
+	@echo "  make edgequake-logs        # View service logs"
+	@echo ""
+	@echo "🔧 Configuration:"
+	@echo "  EDGEQUAKE_REPO = $(EDGEQUAKE_REPO)"
+	@echo "  PLATFORMS      = $(EDGEQUAKE_PLATFORMS)"
+	@echo ""
+
+edgequake-check:
+	@echo "🔍 Checking EdgeQuake repository..."
+	@if [ ! -d "$(EDGEQUAKE_API_DIR)" ]; then \
+		echo "❌ EdgeQuake API directory not found: $(EDGEQUAKE_API_DIR)"; \
+		echo "💡 Update EDGEQUAKE_REPO in Makefile"; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(EDGEQUAKE_WEBUI_DIR)" ]; then \
+		echo "❌ EdgeQuake WebUI directory not found: $(EDGEQUAKE_WEBUI_DIR)"; \
+		echo "💡 Update EDGEQUAKE_REPO in Makefile"; \
+		exit 1; \
+	fi
+	@echo "✅ EdgeQuake repositories found"
+	@echo "   API:   $(EDGEQUAKE_API_DIR)"
+	@echo "   WebUI: $(EDGEQUAKE_WEBUI_DIR)"
+	@echo ""
+
+# Fast single-architecture builds (for testing/development)
+# Note: Cloud Run requires linux/amd64, so we explicitly set the platform
+.PHONY: edgequake-build-api-fast
+edgequake-build-api-fast: edgequake-check
+	@echo "🏗️  Building EdgeQuake API (linux/amd64 for Cloud Run)..."
+	@echo "   Source:    $(shell dirname $(EDGEQUAKE_REPO))"
+	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
+	@echo ""
+	docker buildx build \
+		--platform linux/amd64 \
+		--provenance=false \
+		--sbom=false \
+		-f dockerfiles/Dockerfile.edgequake-api-simple \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$(shell git -C $(EDGEQUAKE_API_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		--push \
+		$(shell dirname $(EDGEQUAKE_REPO))
+	@echo ""
+	@echo "✅ EdgeQuake API image built and pushed"
+	@echo ""
+
+.PHONY: edgequake-build-webui-fast
+edgequake-build-webui-fast: edgequake-check
+	@echo "🏗️  Building EdgeQuake WebUI (linux/amd64 for Cloud Run)..."
+	@echo "   Source:    $(EDGEQUAKE_WEBUI_DIR)"
+	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest"
+	@echo ""
+	@# Get the Rust API URL from Terraform output if available
+	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_url 2>/dev/null || echo "https://edgequake-api-wszhkynzxa-uc.a.run.app"); \
+	echo "   API URL: $$RUST_API_URL"; \
+	docker buildx build \
+		--platform linux/amd64 \
+		--provenance=false \
+		--sbom=false \
+		-f dockerfiles/Dockerfile.edgequake-webui \
+		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(shell git -C $(EDGEQUAKE_WEBUI_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		--push \
+		$(EDGEQUAKE_WEBUI_DIR)
+	@echo ""
+	@echo "✅ EdgeQuake WebUI image built and pushed"
+	@echo ""
+
+.PHONY: edgequake-build-api
+edgequake-build-api: edgequake-check
+	@echo "🏗️  Building EdgeQuake API (multi-arch)..."
+	@echo "   Source:    $(EDGEQUAKE_API_DIR)"
+	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
+	@echo "   Platforms: $(EDGEQUAKE_PLATFORMS)"
+	@echo ""
+	docker buildx build \
+		--platform $(EDGEQUAKE_PLATFORMS) \
+		-f dockerfiles/Dockerfile.edgequake-api \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$(shell git -C $(EDGEQUAKE_API_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		--push \
+		$(EDGEQUAKE_API_DIR)
+	@echo ""
+	@echo "✅ EdgeQuake API image built and pushed"
+	@echo ""
+
+.PHONY: edgequake-build-webui
+edgequake-build-webui: edgequake-check
+	@echo "🏗️  Building EdgeQuake WebUI (multi-arch)..."
+	@echo "   Source:    $(EDGEQUAKE_WEBUI_DIR)"
+	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest"
+	@echo "   Platforms: $(EDGEQUAKE_PLATFORMS)"
+	@echo ""
+	@# Get the Rust API URL from Terraform output if available
+	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_uri 2>/dev/null || echo "/api/v1"); \
+	echo "   API URL: $$RUST_API_URL"; \
+	docker buildx build \
+		--platform $(EDGEQUAKE_PLATFORMS) \
+		-f dockerfiles/Dockerfile.edgequake-webui \
+		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(shell git -C $(EDGEQUAKE_WEBUI_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		--push \
+		$(EDGEQUAKE_WEBUI_DIR)
+	@echo ""
+	@echo "✅ EdgeQuake WebUI image built and pushed"
+	@echo ""
+
+edgequake-build: edgequake-build-api edgequake-build-webui
+	@echo "✅ All EdgeQuake images built and pushed successfully"
+	@echo ""
+
+# Push targets are now integrated with build (buildx --push)
+edgequake-push-api:
+	@echo "ℹ️  Multi-arch builds automatically push to registry"
+	@echo "   Run 'make edgequake-build-api' to build and push"
+	@echo ""
+
+edgequake-push-webui:
+	@echo "ℹ️  Multi-arch builds automatically push to registry"
+	@echo "   Run 'make edgequake-build-webui' to build and push"
+	@echo ""
+
+edgequake-push: edgequake-build
+	@echo "✅ All EdgeQuake images are already pushed"
+	@echo ""
+	@echo "📋 Image URLs:"
+	@echo "   API:   $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
+	@echo "   WebUI: $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest"
+	@echo ""
+
+edgequake-deploy:
+	@echo "🚀 Deploying EdgeQuake to Cloud Run via Terraform..."
+	@echo ""
+	@# Update terraform variables with image URLs
+	@cd terraform && \
+	terraform plan \
+		-var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:latest" \
+		-var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:latest" \
+		-var="rust_api_service_name=edgequake-api" \
+		-var="nextjs_service_name=edgequake-webui" \
+		-out=tfplan-edgequake && \
+	terraform apply tfplan-edgequake
+	@echo ""
+	@echo "✅ EdgeQuake deployed successfully"
+	@echo ""
+
+edgequake-full: edgequake-push edgequake-deploy edgequake-status
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│         🎉 EdgeQuake Deployment Complete!                    │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+
+edgequake-status:
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│              EdgeQuake Service Status                        │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "🔍 Checking Cloud Run services..."
+	@echo ""
+	@echo "📡 EdgeQuake API:"
+	@API_URL=$$(gcloud run services describe edgequake-api \
+		--region $(REGION) \
+		--format='value(status.url)' 2>/dev/null || echo "Not deployed"); \
+	echo "   URL: $$API_URL"; \
+	if [ "$$API_URL" != "Not deployed" ]; then \
+		echo "   Health: $$(curl -s -o /dev/null -w '%{http_code}' $$API_URL/health || echo 'unreachable')"; \
+	fi
+	@echo ""
+	@echo "🌐 EdgeQuake WebUI:"
+	@WEBUI_URL=$$(gcloud run services describe edgequake-webui \
+		--region $(REGION) \
+		--format='value(status.url)' 2>/dev/null || echo "Not deployed"); \
+	echo "   URL: $$WEBUI_URL"; \
+	if [ "$$WEBUI_URL" != "Not deployed" ]; then \
+		echo "   Status: $$(curl -s -o /dev/null -w '%{http_code}' $$WEBUI_URL || echo 'unreachable')"; \
+	fi
+	@echo ""
+	@echo "💾 PostgreSQL Database:"
+	@DB_IP=$$(cd terraform && terraform output -raw db_internal_ip 2>/dev/null || echo "unknown"); \
+	echo "   Private IP: $$DB_IP"; \
+	echo "   Database:   graph_db"; \
+	echo "   Extensions: age, pgvector"
+	@echo ""
+
+edgequake-logs:
+	@echo "📊 Recent EdgeQuake logs..."
+	@echo ""
+	@echo "API logs:"
+	@gcloud logging read \
+		"resource.type=cloud_run_revision AND resource.labels.service_name=edgequake-api" \
+		--limit 20 \
+		--format "table(timestamp,severity,textPayload)" \
+		--region $(REGION) \
+		2>/dev/null || echo "No logs found"
+	@echo ""
+	@echo "WebUI logs:"
+	@gcloud logging read \
+		"resource.type=cloud_run_revision AND resource.labels.service_name=edgequake-webui" \
+		--limit 20 \
+		--format "table(timestamp,severity,textPayload)" \
+		--region $(REGION) \
+		2>/dev/null || echo "No logs found"
+	@echo ""
+
+# ============================================
+# Cleanup Targets
+# ============================================
+
+docker-clean:
+	@echo "🧹 Cleaning Docker cache and resources..."
+	@echo ""
+	@echo "Current disk usage:"
+	@docker system df
+	@echo ""
+	@read -p "⚠️  This will remove all unused containers, networks, images, and build cache. Continue? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		docker system prune -af --volumes; \
+		echo ""; \
+		echo "✅ Docker cleanup complete"; \
+		echo ""; \
+		echo "New disk usage:"; \
+		docker system df; \
+	else \
+		echo "❌ Cleanup cancelled"; \
+	fi
+
+edgequake-clean:
+	@echo "🧹 Removing EdgeQuake images..."
+	@docker images | grep edgequake | awk '{print $$3}' | xargs -r docker rmi -f || true
+	@echo "✅ EdgeQuake images removed"
+	@echo ""
+
+# ============================================
+# End EdgeQuake Targets
+# ============================================
 
 doc:
 	@echo "❌ Did you mean 'make docs'?"

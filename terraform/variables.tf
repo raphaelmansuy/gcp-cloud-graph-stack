@@ -152,3 +152,10 @@ variable "log_retention_days_prod" {
   type        = number
   default     = 30
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API Key for LLM operations"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

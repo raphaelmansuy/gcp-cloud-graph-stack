@@ -80,3 +80,6 @@ tfplan*
 terraform/tfplan*
 
 auto_generated_by_copilot
+
+# Playwright MCP cache
+.playwright-mcp/

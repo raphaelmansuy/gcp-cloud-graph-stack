@@ -12,7 +12,7 @@
 # ============================================
 # Stage 1: Planner - Analyze dependencies
 # ============================================
-FROM rust:1.83-bookworm AS planner
+FROM rust:1.87-bookworm AS planner
 
 WORKDIR /app
 
@@ -22,13 +22,18 @@ RUN cargo install cargo-chef
 # Copy all source files
 COPY . .
 
+# Remove edgequake-pdf crate (has local path dependency on lopdf not in context)
+# edgequake-pdf is not needed for the API build
+RUN rm -rf crates/edgequake-pdf && \
+    sed -i '/edgequake-pdf/d' Cargo.toml
+
 # Generate recipe for dependency caching
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ============================================
 # Stage 2: Cacher - Build dependencies
 # ============================================
-FROM rust:1.83-bookworm AS cacher
+FROM rust:1.87-bookworm AS cacher
 
 WORKDIR /app
 
@@ -51,7 +56,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # ============================================
 # Stage 3: Builder - Build application
 # ============================================
-FROM rust:1.83-bookworm AS builder
+FROM rust:1.87-bookworm AS builder
 
 WORKDIR /app
 
@@ -71,6 +76,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY src/ src/
 COPY migrations/ migrations/
+
+# Remove edgequake-pdf crate (has local path dependency on lopdf not in context)
+RUN rm -rf crates/edgequake-pdf && \
+    sed -i '/edgequake-pdf/d' Cargo.toml
 
 # Build release binary with optimizations
 RUN cargo build --release --locked --features postgres

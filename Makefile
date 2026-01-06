@@ -241,11 +241,13 @@ docker-build:
 		-f dockerfiles/Dockerfile.rust --push . && echo "  ✅ Rust API multi-arch built & pushed" || (echo "  ❌ Rust API failed" && exit 1); \
 	echo "🎉 All multi-arch images built and pushed!"
 
-docker-push: docker-auth
-	@echo "📤 Pushing to registry..."
-	@docker push ${REGISTRY}/edgequake-images/nextjs:latest && echo "  ✅ Next.js pushed" || (echo "  ❌ Next.js failed" && exit 1)
-	@docker push ${REGISTRY}/edgequake-images/rust-api:latest && echo "  ✅ Rust API pushed" || (echo "  ❌ Rust API failed" && exit 1)
-	@echo "🎉 All images pushed!"
+docker-push:
+	@echo "✅ Images already pushed during docker-build"
+	@echo "  📦 Next.js: ${REGISTRY}/edgequake-images/nextjs:latest"
+	@echo "  📦 Rust API: ${REGISTRY}/edgequake-images/rust-api:latest"
+	@echo ""
+	@echo "Note: docker-build uses --push flag, so images are pushed during build"
+	@echo "🎉 No additional push needed!"
 
 # Build and deploy everything with new images
 build-and-deploy: docker-auth
@@ -590,6 +592,7 @@ edgequake-help:
 	@echo ""
 	@echo "🚢 DEPLOY:"
 	@echo "  make edgequake-deploy      # Deploy to Cloud Run via Terraform"
+	@echo "  make edgequake-redeploy    # Force redeploy latest images & route traffic"
 	@echo ""
 	@echo "🧹 CLEANUP:"
 	@echo "  make docker-clean          # Clean Docker cache and volumes"
@@ -743,6 +746,32 @@ edgequake-deploy:
 	@echo ""
 	@echo "✅ EdgeQuake deployed successfully"
 	@echo ""
+
+# Force redeploy with latest Docker images and route 100% traffic
+edgequake-redeploy:
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│      🔄 Force Redeploy Latest EdgeQuake Images              │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "📦 Deploying latest API image..."
+	@gcloud run deploy edgequake-api \
+		--image $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
+		--region=$(REGION) \
+		--project=$(PROJECT_ID) \
+		--quiet
+	@echo ""
+	@echo "📦 Deploying latest WebUI image..."
+	@gcloud run deploy edgequake-webui \
+		--image $(EDGEQUAKE_REGISTRY)/nextjs:latest \
+		--region=$(REGION) \
+		--project=$(PROJECT_ID) \
+		--quiet
+	@echo ""
+	@echo "✅ Latest images deployed and traffic routed!"
+	@echo ""
+	@echo "🔗 Service URLs:"
+	@gcloud run services describe edgequake-api --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • API:    {}"
+	@gcloud run services describe edgequake-webui --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • WebUI:  {}"
 
 edgequake-full: edgequake-push edgequake-deploy edgequake-status
 	@echo "┌─────────────────────────────────────────────────────────────┐"

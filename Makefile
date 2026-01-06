@@ -7,10 +7,97 @@ REGION := us-central1
 REGISTRY := ${REGION}-docker.pkg.dev/${PROJECT_ID}
 TF_DIR := terraform
 
+# ============================================
+# ⚠️  CRITICAL: OPENAI API KEY CONFIGURATION
+# ============================================
+# EdgeQuake requires a valid OpenAI API key for LLM operations.
+# 
+# 🔑 SETUP INSTRUCTIONS:
+# 1. Get your API key from: https://platform.openai.com/account/api-keys
+# 2. Set the environment variable:
+#    export TF_VAR_openai_api_key="sk-proj-..."
+# 3. Add to your shell profile (~/.zshrc or ~/.bashrc):
+#    echo 'export TF_VAR_openai_api_key="sk-proj-..."' >> ~/.zshrc
+# 4. Verify it's set: make check-openai-key
+#
+# ⚠️  NEVER commit API keys to git!
+# ⚠️  Deployments will FAIL without a valid key!
+#
+# 📋 VALIDATION:
+# - API key must start with 'sk-' or 'sk-proj-'
+# - Must be at least 40 characters long
+# - Cannot be a placeholder value
+#
+# 🚀 DEPLOYMENT:
+# All deployment targets automatically check for valid API key.
+# Use 'make check-openai-key' to validate manually.
+# ============================================
+
 .PHONY: help menu quick-start status full-setup deploy dev-setup dev-access \
         setup gcloud-auth gcloud-login gcloud-config gcloud-app-auth gcloud-app-default \
         init plan apply destroy logs ssh \
-        verify-db verify-services clean docs install-tools scaffold test
+        verify-db verify-services clean docs install-tools scaffold test check-openai-key validate-env
+
+# ============================================
+# 🔑 API KEY VALIDATION
+# ============================================
+
+check-openai-key:
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│          🔑 OpenAI API Key Validation                       │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@if [ -z "$$TF_VAR_openai_api_key" ]; then \
+		echo "❌ ERROR: TF_VAR_openai_api_key is NOT set"; \
+		echo ""; \
+		echo "📋 To fix this:"; \
+		echo "   1. Get your API key from: https://platform.openai.com/account/api-keys"; \
+		echo "   2. Export the environment variable:"; \
+		echo "      export TF_VAR_openai_api_key=\"sk-proj-...\""; \
+		echo "   3. Add to ~/.zshrc or ~/.bashrc for persistence"; \
+		echo ""; \
+		exit 1; \
+	elif echo "$$TF_VAR_openai_api_key" | grep -qi "placeholder\|example\|test\|dummy\|xxx"; then \
+		echo "❌ ERROR: API key appears to be a PLACEHOLDER"; \
+		echo "   Current value: $${TF_VAR_openai_api_key:0:15}***"; \
+		echo ""; \
+		echo "📋 Set a REAL OpenAI API key:"; \
+		echo "   export TF_VAR_openai_api_key=\"sk-proj-...\""; \
+		echo ""; \
+		exit 1; \
+	elif [ $${#TF_VAR_openai_api_key} -lt 40 ]; then \
+		echo "❌ ERROR: API key is too SHORT (< 40 characters)"; \
+		echo "   Length: $${#TF_VAR_openai_api_key} characters"; \
+		echo ""; \
+		echo "📋 Valid OpenAI API keys are at least 40 characters"; \
+		echo "   Get a real key from: https://platform.openai.com/account/api-keys"; \
+		echo ""; \
+		exit 1; \
+	elif ! echo "$$TF_VAR_openai_api_key" | grep -qE "^sk-"; then \
+		echo "❌ ERROR: API key format INVALID"; \
+		echo "   OpenAI keys must start with 'sk-' or 'sk-proj-'"; \
+		echo ""; \
+		echo "📋 Check your API key format"; \
+		echo "   Get a real key from: https://platform.openai.com/account/api-keys"; \
+		echo ""; \
+		exit 1; \
+	else \
+		echo "✅ OpenAI API key is SET and appears VALID"; \
+		echo "   Format: $${TF_VAR_openai_api_key:0:10}...$${TF_VAR_openai_api_key: -4}"; \
+		echo "   Length: $${#TF_VAR_openai_api_key} characters"; \
+		echo ""; \
+		echo "💡 Test the key with: curl https://api.openai.com/v1/models \\"; \
+		echo "     -H \"Authorization: Bearer \$$TF_VAR_openai_api_key\""; \
+		echo ""; \
+	fi
+
+validate-env: check-openai-key
+	@echo "✅ All environment variables validated"
+	@echo ""
+
+# ============================================
+# 📚 HELP & DOCUMENTATION
+# ============================================
 
 help:
 	@echo "┌─────────────────────────────────────────────────────────────┐"
@@ -22,6 +109,10 @@ help:
 	@echo "  make menu              # Interactive menu"
 	@echo "  make quick-start       # Setup guide"
 	@echo "  make full-setup        # Auto setup everything"
+	@echo ""
+	@echo "🔑 API KEY CONFIGURATION:"
+	@echo "  make check-openai-key  # Validate OpenAI API key"
+	@echo "  💡 Set: export TF_VAR_openai_api_key=\"sk-proj-...\""
 	@echo ""
 	@echo "⚡ EDGEQUAKE (RAG + Knowledge Graph):"
 	@echo "  make edgequake-full    # Build, push & deploy EdgeQuake"
@@ -193,12 +284,16 @@ config:
 	fi
 
 # Infrastructure
-plan:
+plan: check-openai-key
 	@echo "Planning Terraform changes..."
+	@echo "✅ OpenAI API key validated"
+	@echo ""
 	cd ${TF_DIR} && terraform plan -out=tfplan
 
-apply:
+apply: check-openai-key
 	@echo "Applying Terraform configuration..."
+	@echo "✅ OpenAI API key validated"
+	@echo ""
 	cd ${TF_DIR} && terraform apply tfplan
 	@echo "✓ Infrastructure deployed successfully"
 	@echo ""
@@ -676,8 +771,10 @@ edgequake-push: edgequake-build
 	@echo "   WebUI: $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest"
 	@echo ""
 
-edgequake-deploy:
+edgequake-deploy: check-openai-key
 	@echo "🚀 Deploying EdgeQuake to Cloud Run via Terraform..."
+	@echo ""
+	@echo "✅ OpenAI API key validated"
 	@echo ""
 	@# Update terraform variables with image URLs
 	@cd terraform && \
@@ -693,16 +790,19 @@ edgequake-deploy:
 	@echo ""
 
 # Force redeploy with latest Docker images and route 100% traffic
-edgequake-redeploy:
+edgequake-redeploy: check-openai-key
 	@echo "┌─────────────────────────────────────────────────────────────┐"
 	@echo "│      🔄 Force Redeploy Latest EdgeQuake Images              │"
 	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "✅ OpenAI API key validated"
 	@echo ""
 	@echo "📦 Deploying latest API image..."
 	@gcloud run deploy edgequake-api \
 		--image $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
 		--region=$(REGION) \
 		--project=$(PROJECT_ID) \
+		--update-env-vars=OPENAI_API_KEY=$$TF_VAR_openai_api_key \
 		--quiet
 	@echo ""
 	@echo "📦 Deploying latest WebUI image..."
@@ -715,7 +815,7 @@ edgequake-redeploy:
 	@echo "✅ Latest images deployed and traffic routed!"
 	@echo ""
 	@echo "🔗 Service URLs:"
-	@gcloud run services describe edgequake-api --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • API:    {}"
+	@gcloud run sercheck-openai-key vices describe edgequake-api --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • API:    {}"
 	@gcloud run services describe edgequake-webui --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • WebUI:  {}"
 
 edgequake-full: edgequake-push edgequake-deploy edgequake-status

@@ -19,6 +19,24 @@ This repository contains a **production-ready infrastructure and CI/CD setup** f
 
 Use these compact, repeatable steps to get a working stack quickly. The `Makefile` automates most tasks, and `make build-and-deploy` will build images with the correct API URL and update Cloud Run via Terraform.
 
+### 🔑 Step 0: Configure OpenAI API Key (REQUIRED)
+
+**EdgeQuake requires a valid OpenAI API key to function.**
+
+```bash
+# Get your key from: https://platform.openai.com/account/api-keys
+export TF_VAR_openai_api_key="sk-proj-YOUR-ACTUAL-KEY-HERE"
+
+# Verify it's set correctly
+make check-openai-key
+```
+
+📚 **See detailed setup guide:** [docs/27-openai-api-key-setup.md](docs/27-openai-api-key-setup.md)
+
+**Without this, deployment will succeed but LLM features will fail!**
+
+---
+
 1) Prepare your environment
 
 ```bash
@@ -640,23 +658,27 @@ For different audiences:
 
 🏗️ DevOps / SRE:
    → 01-architecture.md → 05-quick-start.md → 02-deployment-terraform.md
+   → 27-openai-api-key-setup.md (API key configuration)
 
 👨‍💻 Developer:
    → 05-quick-start.md → 03-deployment-github-actions.md
+   → 27-openai-api-key-setup.md (REQUIRED: API key setup)
 
 🔒 Security Engineer:
    → 01-architecture.md → 04-ci-cd-architecture.md
+   → 25-security-checklist.md
 
 💰 Finance / Procurement:
    → 06-roadmap-costs.md
 
 📋 New Team Member:
    → This file (README.md) → 05-quick-start.md → Other docs as needed
+   → 27-openai-api-key-setup.md (MUST READ: API key setup)
 ```
 
 ---
 
-**Last Updated**: 2024
+**Last Updated**: 2026-01-06
 **Project**: gcp-cloud-graph-stack
 **Environment**: saas-app-001 GCP Project
 **Region**: us-central1

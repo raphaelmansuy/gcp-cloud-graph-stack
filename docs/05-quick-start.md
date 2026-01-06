@@ -4,6 +4,23 @@ This guide walks you through deploying the complete infrastructure and applicati
 
 ## Prerequisites
 
+### 🔑 CRITICAL: OpenAI API Key (Required)
+
+**EdgeQuake requires a valid OpenAI API key to function. Deployment will fail without it.**
+
+```bash
+# 1. Get your key from: https://platform.openai.com/account/api-keys
+# 2. Set environment variable:
+export TF_VAR_openai_api_key="sk-proj-YOUR-ACTUAL-KEY-HERE"
+
+# 3. Verify it's set correctly:
+make check-openai-key
+```
+
+📚 **Complete Setup Guide:** [27-openai-api-key-setup.md](27-openai-api-key-setup.md)
+
+---
+
 ### Local Tools
 - **GNU Make** (standard on macOS/Linux)
 - **Terraform 1.5+** ([install](https://www.terraform.io/downloads))

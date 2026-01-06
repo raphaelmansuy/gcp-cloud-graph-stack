@@ -52,12 +52,6 @@ variable "db_port" {
   default     = 5432
 }
 
-variable "nextjs_service_name" {
-  description = "Next.js Cloud Run service name"
-  type        = string
-  default     = "nextjs-frontend"
-}
-
 variable "rust_api_service_name" {
   description = "Rust API Cloud Run service name"
   type        = string
@@ -86,12 +80,6 @@ variable "cloud_run_max_instances" {
   description = "Maximum instances for Cloud Run"
   type        = number
   default     = 10
-}
-
-variable "nextjs_image_url" {
-  description = "Next.js image URL in Artifact Registry"
-  type        = string
-  default     = ""
 }
 
 variable "rust_api_image_url" {

@@ -23,6 +23,9 @@ COPY lopdf ./edgequake/lopdf
 # Change to edgequake directory for build
 WORKDIR /workspace/edgequake/edgequake
 
+# Remove invalid benchmark references to avoid build errors
+RUN sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml || true
+
 # Build the application
 RUN cargo build --release
 

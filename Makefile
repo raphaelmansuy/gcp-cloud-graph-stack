@@ -9,7 +9,7 @@ TF_DIR := terraform
 
 .PHONY: help menu quick-start status full-setup deploy dev-setup dev-access \
         setup gcloud-auth gcloud-login gcloud-config gcloud-app-auth gcloud-app-default \
-        init plan apply destroy logs ssh docker-build docker-push \
+        init plan apply destroy logs ssh \
         verify-db verify-services clean docs install-tools scaffold test
 
 help:
@@ -22,7 +22,6 @@ help:
 	@echo "  make menu              # Interactive menu"
 	@echo "  make quick-start       # Setup guide"
 	@echo "  make full-setup        # Auto setup everything"
-	@echo "  make build-and-deploy  # Build images & deploy"
 	@echo ""
 	@echo "⚡ EDGEQUAKE (RAG + Knowledge Graph):"
 	@echo "  make edgequake-full    # Build, push & deploy EdgeQuake"
@@ -42,8 +41,6 @@ help:
 	@echo "  scaffold          # Create minimal source code"
 	@echo "  init              # Initialize Terraform"
 	@echo "  plan / apply      # Terraform plan/apply"
-	@echo "  docker-build      # Build container images"
-	@echo "  docker-push       # Push images to registry"
 	@echo ""
 	@echo "💻 DATABASE:"
 	@echo "  secure-ssh    db-tunnel    db-connect    db-check"
@@ -95,11 +92,11 @@ quick-start:
 	@echo "4️⃣  Deploy Infrastructure:"
 	@echo "   make deploy"
 	@echo ""
-	@echo "5️⃣  Build & Push Images:"
-	@echo "   make docker-build && make docker-push"
+	@echo "5️⃣  Build & Deploy EdgeQuake:"
+	@echo "   make edgequake-full"
 	@echo ""
 	@echo "6️⃣  Verify & Test:"
-	@echo "   make status"
+	@echo "   make edgequake-status"
 	@echo ""
 	@echo "💡 Pro tip: make full-setup  # Do everything automatically"
 	@echo ""
@@ -113,7 +110,7 @@ status:
 	@cd ${TF_DIR} && terraform state list 2>/dev/null | head -3 | sed 's/^/  ✅ /' || echo "  ⚠️  Not deployed (run: make deploy)"
 	@echo ""
 	@echo "🐳 Docker Images:"
-	@docker images | grep ${REGISTRY} | wc -l | xargs -I {} echo "  ✅ {} images built" || echo "  ⚠️  No images (run: make docker-build)"
+	@docker images | grep ${REGISTRY} | wc -l | xargs -I {} echo "  ✅ {} images built" || echo "  ⚠️  No images (run: make edgequake-build)"
 	@echo ""
 	@echo "☁️  Cloud Resources:"
 	@gcloud compute instances list --filter="name=edgequake-db-vm" --format="value(status)" 2>/dev/null | sed 's/RUNNING/  ✅ VM running/' | sed 's/TERMINATED/  ❌ VM stopped/' || echo "  ⚠️  VM status unknown"
@@ -122,14 +119,14 @@ status:
 	@echo "🔒 SSH Access:"
 	@gcloud compute firewall-rules describe edgequake-allow-ssh-restricted --project=${PROJECT_ID} --format='value(sourceRanges)' 2>/dev/null | sed 's/^/  ✅ /' || echo "  ⚠️  Not configured (run: make secure-ssh)"
 	@echo ""
-	@echo "💡 Quick actions: make verify-infra | make dev-access | make test-nextjs"
+	@echo "💡 Quick actions: make verify-infra | make dev-access | make edgequake-status"
 
-full-setup: setup config init scaffold deploy docker-build docker-push
+full-setup: setup config init deploy edgequake-full
 	@echo ""
 	@echo "🎉 Complete setup finished!"
 	@echo ""
 	@echo "Next steps:"
-	@echo "  • Check system status: make status"
+	@echo "  • Check EdgeQuake status: make edgequake-status"
 	@echo "  • Setup database access: make dev-setup"
 	@echo "  • View documentation: make docs"
 
@@ -137,7 +134,7 @@ deploy: plan
 	@echo "🚀 Deploying infrastructure..."
 	@cd ${TF_DIR} && terraform apply tfplan
 	@echo "✅ Infrastructure deployed!"
-	@echo "💡 Next: make docker-build && make docker-push"
+	@echo "💡 Next: make edgequake-full"
 
 dev-setup:
 	@echo "💻 Database access setup..."
@@ -206,9 +203,9 @@ apply:
 	@echo "✓ Infrastructure deployed successfully"
 	@echo ""
 	@echo "Next steps:"
-	@echo "  1. Build Docker images: make docker-build"
-	@echo "  2. Push to registry: make docker-push"
-	@echo "  3. Verify database: make verify-db"
+	@echo "  1. Build & Deploy EdgeQuake: make edgequake-full"
+	@echo "  2. Verify database: make verify-db"
+	@echo "  3. Check status: make edgequake-status"
 
 destroy:
 	@echo "WARNING: This will delete all infrastructure"
@@ -224,60 +221,7 @@ refresh:
 	cd ${TF_DIR} && terraform refresh
 
 # Docker & Containers
-
-docker-build:
-	@echo "🐳 Building multi-arch Docker images (amd64, arm64)..."
-	@echo "  Getting Rust API URL..."
-	@RUST_API_URL=$$(gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null || echo "https://rust-api-wszhkynzxa-uc.a.run.app"); \
-	echo "  Using API URL: $$RUST_API_URL"; \
-	docker buildx create --use --name multiarch-builder || true; \
-	docker buildx inspect multiarch-builder --bootstrap; \
-	docker buildx build --platform linux/amd64,linux/arm64 \
-		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
-		-t ${REGISTRY}/edgequake-images/nextjs:latest \
-		-f dockerfiles/Dockerfile.nextjs --push . && echo "  ✅ Next.js multi-arch built & pushed" || (echo "  ❌ Next.js failed" && exit 1); \
-	docker buildx build --platform linux/amd64,linux/arm64 \
-		-t ${REGISTRY}/edgequake-images/rust-api:latest \
-		-f dockerfiles/Dockerfile.rust --push . && echo "  ✅ Rust API multi-arch built & pushed" || (echo "  ❌ Rust API failed" && exit 1); \
-	echo "🎉 All multi-arch images built and pushed!"
-
-docker-push:
-	@echo "✅ Images already pushed during docker-build"
-	@echo "  📦 Next.js: ${REGISTRY}/edgequake-images/nextjs:latest"
-	@echo "  📦 Rust API: ${REGISTRY}/edgequake-images/rust-api:latest"
-	@echo ""
-	@echo "Note: docker-build uses --push flag, so images are pushed during build"
-	@echo "🎉 No additional push needed!"
-
-# Build and deploy everything with new images
-build-and-deploy: docker-auth
-	@echo "┌─────────────────────────────────────────────────────────────┐"
-	@echo "│         🚀 Complete Build & Deploy Pipeline                │"
-	@echo "└─────────────────────────────────────────────────────────────┘"
-	@echo ""
-	@echo "Step 1/3: Building and pushing Docker images..."
-	@$(MAKE) docker-build
-	@echo ""
-	@echo "Step 2/3: Updating Terraform with new image tags..."
-	@cd ${TF_DIR} && terraform plan -out=tfplan-deploy
-	@echo ""
-	@echo "Step 3/3: Applying Terraform changes..."
-	@cd ${TF_DIR} && terraform apply tfplan-deploy
-	@echo ""
-	@echo "✅ Build and deploy complete!"
-	@echo ""
-	@echo "📊 Service URLs:"
-	@gcloud run services describe nextjs-frontend --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "  • Next.js: {}"
-	@gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "  • Rust API: {}"
-	@echo ""
-	@echo "🔍 Verify health:"
-	@gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "  curl {}/health"
-
-# Quick deploy without rebuilding images
-redeploy:
-	@echo "🔄 Redeploying services..."
-	@cd ${TF_DIR} && terraform apply -auto-approve
-	@echo "✅ Services redeployed!"
+# Note: Use 'make edgequake-full' to build and deploy EdgeQuake
 
 docker-auth:
 	@echo "Configuring Docker authentication..."
@@ -285,8 +229,8 @@ docker-auth:
 
 docker-clean-old:
 	@echo "Removing local Docker images..."
-	docker rmi ${REGISTRY}/edgequake-images/nextjs:latest || true
-	docker rmi ${REGISTRY}/edgequake-images/rust-api:latest || true
+	docker rmi ${REGISTRY}/edgequake-images/edgequake-webui:latest || true
+	docker rmi ${REGISTRY}/edgequake-images/edgequake-api:latest || true
 	@echo "✓ Docker images removed"
 
 scaffold:
@@ -326,30 +270,30 @@ verify-db:
 
 verify-services:
 	@echo "🔍 Checking services..."
-	@gcloud run services describe nextjs-frontend --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "✅ Next.js: {}" || echo "❌ Next.js not found"
-	@gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "✅ Rust API: {}" || echo "❌ Rust API not found"
+	@gcloud run services describe edgequake-webui --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "✅ EdgeQuake WebUI: {}" || echo "❌ EdgeQuake WebUI not found"
+	@gcloud run services describe edgequake-api --region=${REGION} --format='value(status.url)' 2>/dev/null | xargs -I {} echo "✅ EdgeQuake API: {}" || echo "❌ EdgeQuake API not found"
 
-test: test-nextjs test-rust
+test: test-edgequake-webui test-edgequake-api
 	@echo "✅ All tests passed!"
 
-test-nextjs:
-	@NEXTJS_URL=$$(gcloud run services describe nextjs-frontend --region=${REGION} --format='value(status.url)' 2>/dev/null); \
-	[ -z "$$NEXTJS_URL" ] && echo "❌ Next.js not found" && exit 1 || (echo "🧪 Testing Next.js..." && curl -s --max-time 5 $$NEXTJS_URL >/dev/null && echo "✅ Next.js responding" || echo "❌ Next.js not responding")
+test-edgequake-webui:
+	@WEBUI_URL=$$(gcloud run services describe edgequake-webui --region=${REGION} --format='value(status.url)' 2>/dev/null); \
+	[ -z "$$WEBUI_URL" ] && echo "❌ EdgeQuake WebUI not found" && exit 1 || (echo "🧪 Testing EdgeQuake WebUI..." && curl -s --max-time 5 $$WEBUI_URL >/dev/null && echo "✅ EdgeQuake WebUI responding" || echo "❌ EdgeQuake WebUI not responding")
 
-test-rust:
-	@RUST_URL=$$(gcloud run services describe rust-api --region=${REGION} --format='value(status.url)' 2>/dev/null); \
-	[ -z "$$RUST_URL" ] && echo "❌ Rust API not found" && exit 1 || (echo "🧪 Testing Rust API..." && curl -s --max-time 5 $$RUST_URL >/dev/null && echo "✅ Rust API responding" || echo "❌ Rust API not responding")
+test-edgequake-api:
+	@API_URL=$$(gcloud run services describe edgequake-api --region=${REGION} --format='value(status.url)' 2>/dev/null); \
+	[ -z "$$API_URL" ] && echo "❌ EdgeQuake API not found" && exit 1 || (echo "🧪 Testing EdgeQuake API..." && curl -s --max-time 5 $$API_URL >/dev/null && echo "✅ EdgeQuake API responding" || echo "❌ EdgeQuake API not responding")
 
 # Operations
 logs-cloud-run:
 	@echo "Showing Cloud Run logs (last 50 lines)..."
-	@echo "Next.js Frontend:"
-	gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=nextjs-frontend" \
+	@echo "EdgeQuake WebUI:"
+	gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=edgequake-webui" \
 		--limit=50 --format='table(timestamp, severity, textPayload)' | head -20
 	@echo ""
-	@echo "Rust API:"
-	gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=rust-api" \
-		--limit=50 --format='table(timestamp, severity, textPayload)' | head -20
+	@echo "EdgeQuake API:"
+	gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=edgequake-api" \
+		--limit=50 --format='table(timestamp, severity, textPayLabel)' | head -20
 
 logs-vm:
 	@echo "Showing VM startup script logs..."
@@ -580,7 +524,8 @@ edgequake-help:
 	@echo "🚀 QUICK START:"
 	@echo "  make edgequake-full        # Build, push, and deploy everything"
 	@echo "  make edgequake-status      # Check deployment status"
-	@echo "" (Multi-arch: amd64 + arm64):"
+	@echo ""
+	@echo "🏗️  BUILD (Multi-arch: amd64 + arm64):"
 	@echo "  make edgequake-build       # Build both API and WebUI images"
 	@echo "  make edgequake-build-api   # Build API image only"
 	@echo "  make edgequake-build-webui # Build WebUI image only"

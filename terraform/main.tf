@@ -86,36 +86,6 @@ resource "google_artifact_registry_repository" "app_images" {
   depends_on = [google_project_service.required_apis]
 }
 
-# Cloud Run Module (Next.js)
-module "cloud_run_nextjs" {
-  source = "./modules/cloud_run"
-
-  project_id            = var.project_id
-  region                = var.region
-  service_name          = var.nextjs_service_name
-  image_url             = var.nextjs_image_url != "" ? var.nextjs_image_url : "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/nextjs:latest"
-  memory                = var.cloud_run_memory
-  cpu                   = var.cloud_run_cpu
-  min_instances         = var.cloud_run_min_instances
-  max_instances         = var.cloud_run_max_instances
-  vpc_network_name      = module.vpc.vpc_name
-  vpc_subnet_name       = module.vpc.subnet_name
-  enable_direct_egress  = var.enable_direct_vpc_egress
-  vpc_connector_name    = !var.enable_direct_vpc_egress ? module.vpc.vpc_connector_name : null
-  allow_unauthenticated = true
-  labels                = var.labels
-
-  environment_variables = {
-    "NODE_ENV" = var.environment
-    "NEXT_PUBLIC_API_URL" = module.cloud_run_rust_api.service_uri
-  }
-  service_account_name = google_service_account.cloud_run_sa.email
-
-  depends_on = [
-    google_project_service.required_apis,
-    module.vpc,
-  ]
-}
 
 # Cloud Run Module (Rust API)
 module "cloud_run_rust_api" {

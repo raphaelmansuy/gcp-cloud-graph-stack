@@ -52,17 +52,17 @@ make build-and-deploy
 4) Verify
 
 ```bash
-# Rust API health
-curl -s https://rust-api-wszhkynzxa-uc.a.run.app/health | jq .
+# EdgeQuake API health
+curl -s https://edgequake-api-wszhkynzxa-uc.a.run.app/health | jq .
 
-# Next.js health page
-open https://nextjs-frontend-wszhkynzxa-uc.a.run.app/health
+# EdgeQuake WebUI
+open https://edgequake-webui-wszhkynzxa-uc.a.run.app
 ```
 
 Quick reference of useful Make targets:
-- `make full-setup`  : Run setup, scaffold, deploy (all-in-one)
-- `make docker-build`: Build and push images (Next.js will be built with the detected Rust API URL)
-- `make build-and-deploy`: Build images and apply Terraform updates (recommended)
+- `make edgequake-full`  : Build, push, and deploy EdgeQuake (all-in-one)
+- `make edgequake-build`: Build EdgeQuake images (API and WebUI)
+- `make edgequake-status`: Check EdgeQuake deployment status
 
 ---
 
@@ -352,7 +352,7 @@ terraform apply  # Updates Cloud Run services with new images
 
 ```bash
 # View application logs
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=nextjs-frontend" \
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=edgequake-webui" \
   --limit=20 --format=json
 
 # Note: For cost control we exclude DEBUG logs by default in dev and use short retention (7 days).

@@ -28,10 +28,6 @@ output "artifact_registry_repository" {
   value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}"
 }
 
-output "nextjs_service_url" {
-  description = "Next.js Cloud Run service URL"
-  value       = module.cloud_run_nextjs.service_uri
-}
 
 output "rust_api_service_url" {
   description = "Rust API Cloud Run service URL"
@@ -62,14 +58,8 @@ output "deployment_instructions" {
     3. Apply the configuration:
        terraform apply tfplan
 
-    4. Next.js Frontend:
-       - Build: docker build -t nextjs:latest -f dockerfiles/Dockerfile.nextjs .
-       - Tag: docker tag nextjs:latest ${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/nextjs:latest
-       - Push: docker push ${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/nextjs:latest
-       - Update Terraform variable: nextjs_image_url
-       - Apply: terraform apply
 
-    5. Rust API:
+     4. EdgeQuake API:
        - Build: docker build -t rust-api:latest -f dockerfiles/Dockerfile.rust .
        - Tag: docker tag rust-api:latest ${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/rust-api:latest
        - Push: docker push ${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/rust-api:latest

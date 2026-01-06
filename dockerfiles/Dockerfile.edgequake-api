@@ -24,8 +24,10 @@ COPY . .
 
 # Remove edgequake-pdf crate (has local path dependency on lopdf not in context)
 # edgequake-pdf is not needed for the API build
+# Also remove benchmark references that don't exist
 RUN rm -rf crates/edgequake-pdf && \
-    sed -i '/edgequake-pdf/d' Cargo.toml
+    sed -i '/edgequake-pdf/d' Cargo.toml && \
+    sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml
 
 # Generate recipe for dependency caching
 RUN cargo chef prepare --recipe-path recipe.json
@@ -77,9 +79,10 @@ COPY crates/ crates/
 COPY src/ src/
 COPY migrations/ migrations/
 
-# Remove edgequake-pdf crate (has local path dependency on lopdf not in context)
+# Remove edgequake-pdf crate and invalid benchmark references
 RUN rm -rf crates/edgequake-pdf && \
-    sed -i '/edgequake-pdf/d' Cargo.toml
+    sed -i '/edgequake-pdf/d' Cargo.toml && \
+    sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml
 
 # Build release binary with optimizations
 RUN cargo build --release --locked --features postgres

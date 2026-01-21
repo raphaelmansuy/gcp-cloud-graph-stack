@@ -33,15 +33,15 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm@10.13.1
 
+# Build arguments for environment variables (before COPY to invalidate cache)
+ARG NEXT_PUBLIC_API_URL=/api/v1
+ARG NODE_ENV=production
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy application source
 COPY . .
-
-# Build arguments for environment variables
-ARG NEXT_PUBLIC_API_URL=/api/v1
-ARG NODE_ENV=production
 
 # Set environment variables for build
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}

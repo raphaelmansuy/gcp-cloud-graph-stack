@@ -807,7 +807,7 @@ edgequake-redeploy: check-openai-key
 	@echo ""
 	@echo "📦 Deploying latest WebUI image..."
 	@gcloud run deploy edgequake-webui \
-		--image $(EDGEQUAKE_REGISTRY)/nextjs:latest \
+		--image $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
 		--region=$(REGION) \
 		--project=$(PROJECT_ID) \
 		--quiet

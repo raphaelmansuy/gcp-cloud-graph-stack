@@ -88,6 +88,18 @@ variable "rust_api_image_url" {
   default     = ""
 }
 
+variable "nextjs_service_name" {
+  description = "Next.js WebUI Cloud Run service name"
+  type        = string
+  default     = "edgequake-webui"
+}
+
+variable "nextjs_image_url" {
+  description = "Next.js WebUI image URL in Artifact Registry"
+  type        = string
+  default     = ""
+}
+
 variable "enable_direct_vpc_egress" {
   description = "Enable Direct VPC egress for Cloud Run (recommended over VPC connectors)"
   type        = bool
@@ -125,8 +137,8 @@ variable "labels" {
 # Logging / cost-minimization variables
 variable "enable_log_exclusions" {
   description = "Enable conservative log exclusions to reduce logging volume (recommended for dev). Excludes DEBUG logs for Cloud Run, Compute, and Cloud Build."
-  type    = bool
-  default = true
+  type        = bool
+  default     = true
 }
 
 variable "log_retention_days_dev" {

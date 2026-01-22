@@ -103,15 +103,15 @@ module "cloud_run_rust_api" {
   vpc_subnet_name       = module.vpc.subnet_name
   enable_direct_egress  = var.enable_direct_vpc_egress
   vpc_connector_name    = !var.enable_direct_vpc_egress ? module.vpc.vpc_connector_name : null
-  allow_unauthenticated = true  # Allow public access for browser-based WebUI
+  allow_unauthenticated = true # Allow public access for browser-based WebUI
   labels                = var.labels
 
   environment_variables = {
     # Simple database connection that matches working configuration
-    "DATABASE_URL"      = "postgresql://postgres:postgres@${module.compute.vm_private_ip}:${var.db_port}/graph_db"
-    "RUST_LOG"          = "info,edgequake=debug"
-    "OPENAI_API_KEY"    = var.openai_api_key
-    "ENVIRONMENT"       = "production"  # Match working revision
+    "DATABASE_URL"   = "postgresql://postgres:postgres@${module.compute.vm_private_ip}:${var.db_port}/graph_db"
+    "RUST_LOG"       = "info,edgequake=debug"
+    "OPENAI_API_KEY" = var.openai_api_key
+    "ENVIRONMENT"    = "production" # Match working revision
   }
   service_account_name = google_service_account.cloud_run_sa.email
 
@@ -119,6 +119,38 @@ module "cloud_run_rust_api" {
     google_project_service.required_apis,
     module.vpc,
     module.compute,
+  ]
+}
+
+# Cloud Run Module (Next.js WebUI)
+module "cloud_run_nextjs_webui" {
+  source = "./modules/cloud_run"
+
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = var.nextjs_service_name
+  image_url             = var.nextjs_image_url != "" ? var.nextjs_image_url : "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app_images.repository_id}/edgequake-webui:latest"
+  memory                = var.cloud_run_memory
+  cpu                   = var.cloud_run_cpu
+  min_instances         = var.cloud_run_min_instances
+  max_instances         = var.cloud_run_max_instances
+  vpc_network_name      = module.vpc.vpc_name
+  vpc_subnet_name       = module.vpc.subnet_name
+  enable_direct_egress  = var.enable_direct_vpc_egress
+  vpc_connector_name    = !var.enable_direct_vpc_egress ? module.vpc.vpc_connector_name : null
+  allow_unauthenticated = true # Allow public access for browser-based WebUI
+  labels                = var.labels
+
+  environment_variables = {
+    "NEXT_PUBLIC_API_URL" = module.cloud_run_rust_api.service_uri
+    "NODE_ENV"            = "production"
+  }
+  service_account_name = google_service_account.cloud_run_sa.email
+
+  depends_on = [
+    google_project_service.required_apis,
+    module.vpc,
+    module.cloud_run_rust_api,
   ]
 }
 
@@ -144,12 +176,12 @@ resource "google_project_iam_member" "secret_accessor" {
 # ----------------------
 # Create a short-retention log bucket for non-prod (reduces storage costs)
 resource "google_logging_project_bucket_config" "dev_logs" {
-  count         = var.environment == "dev" ? 1 : 0
-  project       = var.project_id
-  bucket_id     = "dev-logs"
-  location      = var.region
+  count          = var.environment == "dev" ? 1 : 0
+  project        = var.project_id
+  bucket_id      = "dev-logs"
+  location       = var.region
   retention_days = var.log_retention_days_dev
-  description   = "Low-retention bucket for development logs to reduce Cloud Logging storage costs"
+  description    = "Low-retention bucket for development logs to reduce Cloud Logging storage costs"
 }
 
 # Conservative exclusions: drop DEBUG logs for noisy resources (Cloud Run, GCE, Cloud Build)
@@ -205,5 +237,5 @@ output "logging_summary" {
   }
   description = "Summary of logging resources created (dev-only)"
   depends_on  = [google_project_service.required_apis]
-  sensitive    = false
+  sensitive   = false
 }

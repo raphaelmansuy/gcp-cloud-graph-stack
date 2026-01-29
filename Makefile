@@ -601,10 +601,12 @@ db-chec:
 
 # EdgeQuake repository location (adjust if needed)
 EDGEQUAKE_REPO := /Users/raphaelmansuy/Github/03-working/edgequake
+EDGEQUAKE_BRANCH := edgequake-main
 EDGEQUAKE_API_DIR := $(EDGEQUAKE_REPO)/edgequake
 EDGEQUAKE_WEBUI_DIR := $(EDGEQUAKE_REPO)/edgequake_webui
 EDGEQUAKE_REGISTRY := $(REGISTRY)/edgequake-images
 EDGEQUAKE_PLATFORMS := linux/amd64,linux/arm64
+EDGEQUAKE_VERSION := $(shell cd $(EDGEQUAKE_REPO) 2>/dev/null && git rev-parse --short HEAD || echo "unknown")
 
 .PHONY: edgequake-check edgequake-build edgequake-build-api edgequake-build-webui \
         edgequake-push edgequake-push-api edgequake-push-webui \
@@ -617,38 +619,46 @@ edgequake-help:
 	@echo "└─────────────────────────────────────────────────────────────┘"
 	@echo ""
 	@echo "🚀 QUICK START:"
-	@echo "  make edgequake-full        # Build, push, and deploy everything"
-	@echo "  make edgequake-status      # Check deployment status"
+	@echo "  make edgequake-deploy-latest  # Pull latest from $(EDGEQUAKE_BRANCH), build & deploy"
+	@echo "  make edgequake-full            # Build, push, and deploy everything"
+	@echo "  make edgequake-status          # Check deployment status"
 	@echo ""
 	@echo "🏗️  BUILD (Multi-arch: amd64 + arm64):"
-	@echo "  make edgequake-build       # Build both API and WebUI images"
-	@echo "  make edgequake-build-api   # Build API image only"
-	@echo "  make edgequake-build-webui # Build WebUI image only"
+	@echo "  make edgequake-build           # Build both API and WebUI images"
+	@echo "  make edgequake-build-api       # Build API image only"
+	@echo "  make edgequake-build-webui     # Build WebUI image only"
 	@echo ""
 	@echo "📤 PUSH:"
-	@echo "  make edgequake-push        # Push both images to Artifact Registry"
-	@echo "  make edgequake-push-api    # Push API image only"
-	@echo "  make edgequake-push-webui  # Push WebUI image only"
+	@echo "  make edgequake-push            # Push both images to Artifact Registry"
+	@echo "  make edgequake-push-api        # Push API image only"
+	@echo "  make edgequake-push-webui      # Push WebUI image only"
 	@echo ""
 	@echo "🚢 DEPLOY:"
-	@echo "  make edgequake-deploy      # Deploy to Cloud Run via Terraform"
-	@echo "  make edgequake-redeploy    # Force redeploy latest images & route traffic"
+	@echo "  make edgequake-deploy-latest   # Deploy latest from $(EDGEQUAKE_BRANCH)"
+	@echo "  make edgequake-deploy          # Deploy to Cloud Run via Terraform"
+	@echo "  make edgequake-redeploy        # Force redeploy latest images & route traffic"
 	@echo ""
 	@echo "🧹 CLEANUP:"
-	@echo "  make docker-clean          # Clean Docker cache and volumes"
-	@echo "  make edgequake-clean       # Clean EdgeQuake images"
+	@echo "  make docker-clean              # Clean Docker cache and volumes"
+	@echo "  make edgequake-clean           # Clean EdgeQuake images"
 	@echo ""
 	@echo "📊 MONITORING:"
-	@echo "  make edgequake-status      # Show service URLs and status"
-	@echo "  make edgequake-logs        # View service logs"
+	@echo "  make edgequake-status          # Show service URLs and status"
+	@echo "  make edgequake-logs            # View service logs"
 	@echo ""
 	@echo "🔧 Configuration:"
-	@echo "  EDGEQUAKE_REPO = $(EDGEQUAKE_REPO)"
-	@echo "  PLATFORMS      = $(EDGEQUAKE_PLATFORMS)"
+	@echo "  EDGEQUAKE_REPO   = $(EDGEQUAKE_REPO)"
+	@echo "  EDGEQUAKE_BRANCH = $(EDGEQUAKE_BRANCH)"
+	@echo "  PLATFORMS        = $(EDGEQUAKE_PLATFORMS)"
 	@echo ""
 
 edgequake-check:
 	@echo "🔍 Checking EdgeQuake repository..."
+	@if [ ! -d "$(EDGEQUAKE_REPO)" ]; then \
+		echo "❌ EdgeQuake repository not found: $(EDGEQUAKE_REPO)"; \
+		echo "💡 Update EDGEQUAKE_REPO in Makefile"; \
+		exit 1; \
+	fi
 	@if [ ! -d "$(EDGEQUAKE_API_DIR)" ]; then \
 		echo "❌ EdgeQuake API directory not found: $(EDGEQUAKE_API_DIR)"; \
 		echo "💡 Update EDGEQUAKE_REPO in Makefile"; \
@@ -659,9 +669,18 @@ edgequake-check:
 		echo "💡 Update EDGEQUAKE_REPO in Makefile"; \
 		exit 1; \
 	fi
-	@echo "✅ EdgeQuake repositories found"
-	@echo "   API:   $(EDGEQUAKE_API_DIR)"
-	@echo "   WebUI: $(EDGEQUAKE_WEBUI_DIR)"
+	@echo "✅ EdgeQuake repository found"
+	@echo "   Branch: $(EDGEQUAKE_BRANCH)"
+	@echo "   API:    $(EDGEQUAKE_API_DIR)"
+	@echo "   WebUI:  $(EDGEQUAKE_WEBUI_DIR)"
+	@echo ""
+	@echo "📥 Pulling latest changes from $(EDGEQUAKE_BRANCH)..."
+	@cd $(EDGEQUAKE_REPO) && \
+		git fetch origin $(EDGEQUAKE_BRANCH) && \
+		git checkout $(EDGEQUAKE_BRANCH) && \
+		git pull origin $(EDGEQUAKE_BRANCH) && \
+		echo "✅ Updated to latest: $$(git rev-parse --short HEAD) - $$(git log -1 --pretty=format:'%s')" || \
+		(echo "⚠️  Failed to pull latest changes. Using current version."; exit 0)
 	@echo ""
 
 # Fast single-architecture builds (for testing/development)
@@ -672,13 +691,15 @@ edgequake-build-api-fast: edgequake-check
 	@echo "   Source:    $(shell dirname $(EDGEQUAKE_REPO))"
 	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
 	@echo ""
+	@VERSION=$$(cd $(EDGEQUAKE_REPO) && git rev-parse --short HEAD); \
 	docker buildx build \
 		--platform linux/amd64 \
 		--provenance=false \
 		--sbom=false \
+		--build-arg BUILD_VERSION=$$VERSION \
 		-f dockerfiles/Dockerfile.edgequake-api-simple \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
-		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$(shell git -C $(EDGEQUAKE_API_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$$VERSION \
 		--push \
 		$(shell dirname $(EDGEQUAKE_REPO))
 	@echo ""
@@ -693,15 +714,18 @@ edgequake-build-webui-fast: edgequake-check
 	@echo ""
 	@# Get the Rust API URL from Terraform output if available
 	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_url 2>/dev/null || echo "https://edgequake-api-wszhkynzxa-uc.a.run.app"); \
+	VERSION=$$(cd $(EDGEQUAKE_REPO) && git rev-parse --short HEAD); \
 	echo "   API URL: $$RUST_API_URL"; \
+	echo "   Version: $$VERSION"; \
 	docker buildx build \
 		--platform linux/amd64 \
 		--provenance=false \
 		--sbom=false \
-		-f dockerfiles/Dockerfile.edgequake-webui \
 		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
+		--build-arg BUILD_VERSION=$$VERSION \
+		-f dockerfiles/Dockerfile.edgequake-webui \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
-		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(shell git -C $(EDGEQUAKE_WEBUI_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$$VERSION \
 		--push \
 		$(EDGEQUAKE_WEBUI_DIR)
 	@echo ""
@@ -770,6 +794,14 @@ edgequake-push: edgequake-build
 	@echo "   API:   $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
 	@echo "   WebUI: $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest"
 	@echo ""
+
+# Deploy latest version from edgequake-main branch
+edgequake-deploy-latest: check-openai-key
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│     🚀 Deploy Latest EdgeQuake from $(EDGEQUAKE_BRANCH)      │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@./scripts/deploy-edgequake-latest.sh
 
 edgequake-deploy: check-openai-key
 	@echo "🚀 Deploying EdgeQuake to Cloud Run via Terraform..."

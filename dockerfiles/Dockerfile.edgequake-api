@@ -1,5 +1,6 @@
 # EdgeQuake API Dockerfile
 # Multi-stage build for production-optimized Rust application with PostgreSQL support
+# Build context: EDGEQUAKE_API_DIR (e.g., /path/to/edgequake/edgequake)
 #
 # Features:
 # - Multi-stage build to minimize image size
@@ -8,6 +9,7 @@
 # - Non-root user for security
 # - Health check endpoint
 # - PostgreSQL client libraries
+# - PDF processing via pdfium-render (PDFium backend)
 
 # ============================================
 # Stage 1: Planner - Analyze dependencies
@@ -22,12 +24,8 @@ RUN cargo install cargo-chef
 # Copy all source files
 COPY . .
 
-# Remove edgequake-pdf crate (has local path dependency on lopdf not in context)
-# edgequake-pdf is not needed for the API build
-# Also remove benchmark references that don't exist
-RUN rm -rf crates/edgequake-pdf && \
-    sed -i '/edgequake-pdf/d' Cargo.toml && \
-    sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml
+# Remove invalid benchmark references to avoid build errors
+RUN sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml || true
 
 # Generate recipe for dependency caching
 RUN cargo chef prepare --recipe-path recipe.json
@@ -39,11 +37,12 @@ FROM rust:1.88-bookworm AS cacher
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies (including pdfium requirements)
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     libpq-dev \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Install cargo-chef
@@ -67,6 +66,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     libpq-dev \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy cached dependencies from cacher
@@ -78,13 +78,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY src/ src/
 COPY migrations/ migrations/
+COPY .sqlx/ .sqlx/
 
-# Remove edgequake-pdf crate and invalid benchmark references
-RUN rm -rf crates/edgequake-pdf && \
-    sed -i '/edgequake-pdf/d' Cargo.toml && \
-    sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml
+# Remove invalid benchmark references
+RUN sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml || true
 
 # Build release binary with optimizations
+# Use SQLx offline mode to avoid requiring DATABASE_URL at build time
+ENV SQLX_OFFLINE=true
 RUN cargo build --release --features postgres
 
 # Strip symbols to reduce binary size

@@ -758,7 +758,7 @@ edgequake-build-webui: edgequake-check
 	@echo "   Platforms: $(EDGEQUAKE_PLATFORMS)"
 	@echo ""
 	@# Get the Rust API URL from Terraform output if available
-	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_uri 2>/dev/null || echo "/api/v1"); \
+	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_url 2>/dev/null || echo "https://edgequake-api-wszhkynzxa-uc.a.run.app"); \
 	echo "   API URL: $$RUST_API_URL"; \
 	docker buildx build \
 		--platform $(EDGEQUAKE_PLATFORMS) \
@@ -808,17 +808,18 @@ edgequake-deploy: check-openai-key
 	@echo ""
 	@echo "✅ OpenAI API key validated"
 	@echo ""
-	@# Update terraform variables with image URLs
+	@# Update terraform variables with image URLs and OpenAI API key
 	@cd terraform && \
 	terraform plan \
 		-var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:latest" \
 		-var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:latest" \
 		-var="rust_api_service_name=edgequake-api" \
 		-var="nextjs_service_name=edgequake-webui" \
+		-var="openai_api_key=$$TF_VAR_openai_api_key" \
 		-out=tfplan-edgequake && \
 	terraform apply tfplan-edgequake
 	@echo ""
-	@echo "✅ EdgeQuake deployed successfully"
+	@echo "✅ EdgeQuake deployed successfully with updated OpenAI API key"
 	@echo ""
 
 # Force redeploy with latest Docker images and route 100% traffic
@@ -847,13 +848,18 @@ edgequake-redeploy: check-openai-key
 	@echo "✅ Latest images deployed and traffic routed!"
 	@echo ""
 	@echo "🔗 Service URLs:"
-	@gcloud run sercheck-openai-key vices describe edgequake-api --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • API:    {}"
+	@gcloud run services describe edgequake-api --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • API:    {}"
 	@gcloud run services describe edgequake-webui --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • WebUI:  {}"
 
-edgequake-full: edgequake-push edgequake-deploy edgequake-status
+edgequake-full: check-openai-key edgequake-build edgequake-deploy edgequake-status
 	@echo "┌─────────────────────────────────────────────────────────────┐"
 	@echo "│         🎉 EdgeQuake Deployment Complete!                    │"
 	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "📋 Deployment Summary:"
+	@echo "   • Docker images: Built and pushed"
+	@echo "   • OpenAI API key: Updated"
+	@echo "   • Services: Deployed via Terraform"
 	@echo ""
 
 edgequake-status:

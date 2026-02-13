@@ -118,6 +118,7 @@ help:
 	@echo "  make edgequake-full    # Build, push & deploy EdgeQuake"
 	@echo "  make edgequake-help    # EdgeQuake commands"
 	@echo "  make edgequake-status  # Check EdgeQuake services"
+	@echo "  make sqlx-prepare-auto # Generate SQLx cache (Docker-based)"
 	@echo ""
 	@echo "📋 WORKFLOWS:"
 	@echo "  make status            # System health check"
@@ -598,31 +599,77 @@ db-chec:
 # ============================================
 # EdgeQuake Deployment Targets
 # ============================================
-edgequake-deploy-branch:
+
+# Clean Docker build cache to ensure fresh builds with correct version
+.PHONY: edgequake-clean-cache
+edgequake-clean-cache:
+	@echo "🧹 Cleaning Docker build cache..."
+	@docker buildx prune -f
+	@echo "✅ Cache cleaned"
+	@echo ""
+
+# Extract expected version from Cargo.toml for verification
+.PHONY: edgequake-get-version
+edgequake-get-version:
+	@cd $(EDGEQUAKE_GIT_REPO) && \
+		grep -A1 "\[workspace.package\]" $(EDGEQUAKE_REPO)/Cargo.toml | \
+		grep "version" | \
+		awk -F'"' '{print $$2}' || echo "unknown"
+
+# Verify deployed version matches expected version
+.PHONY: edgequake-verify-version
+edgequake-verify-version:
+	@echo "🔍 Verifying deployed version..."
+	@EXPECTED_VERSION=$$(make -s edgequake-get-version); \
+	API_URL=$$(gcloud run services describe edgequake-api --region=$(REGION) --format='value(status.url)' 2>/dev/null); \
+	if [ -z "$$API_URL" ]; then \
+		echo "⚠️  Cannot verify: API service not found"; \
+		exit 0; \
+	fi; \
+	DEPLOYED_VERSION=$$(curl -s --max-time 10 $$API_URL/health 2>/dev/null | jq -r '.version // "unknown"'); \
+	echo "   Expected: v$$EXPECTED_VERSION"; \
+	echo "   Deployed: v$$DEPLOYED_VERSION"; \
+	if [ "$$EXPECTED_VERSION" = "$$DEPLOYED_VERSION" ]; then \
+		echo "✅ Version verified successfully"; \
+	else \
+		echo "❌ Version mismatch! Expected $$EXPECTED_VERSION but got $$DEPLOYED_VERSION"; \
+		exit 1; \
+	fi
+	@echo ""
+
+# Deploy specific branch with clean cache and version verification
+edgequake-deploy-branch: edgequake-clean-cache sqlx-prepare-auto
 	@if [ -z "$(BRANCH)" ]; then \
 		echo "❌ Please specify the branch: make edgequake-deploy-branch BRANCH=<branch-name>"; \
 		exit 1; \
 	else \
+		EXPECTED_VERSION=$$(cd $(EDGEQUAKE_GIT_REPO) && git checkout $(BRANCH) >/dev/null 2>&1 && make -s -C $(CURDIR) edgequake-get-version); \
 		echo "┌─────────────────────────────────────────────────────────────┐"; \
 		echo "│   🚀 Build & Deploy EdgeQuake branch: $(BRANCH)              │"; \
+		echo "│   📦 Expected version: $$EXPECTED_VERSION                    │"; \
 		echo "└─────────────────────────────────────────────────────────────┘"; \
 		echo ""; \
-		EDGEQUAKE_BRANCH=$(BRANCH) ./scripts/deploy-edgequake-latest.sh; \
+		EDGEQUAKE_BRANCH=$(BRANCH) ./scripts/deploy-edgequake-latest.sh && \
+		echo "" && \
+		make edgequake-verify-version; \
 	fi
 
 # EdgeQuake repository location (adjust if needed)
-EDGEQUAKE_REPO := /Users/raphaelmansuy/Github/03-working/edgequake
-EDGEQUAKE_BRANCH := edgequake-main
-EDGEQUAKE_API_DIR := $(EDGEQUAKE_REPO)/edgequake
-EDGEQUAKE_WEBUI_DIR := $(EDGEQUAKE_REPO)/edgequake_webui
+EDGEQUAKE_GIT_REPO := /Users/raphaelmansuy/Github/03-working/edgequake
+EDGEQUAKE_REPO := $(EDGEQUAKE_GIT_REPO)/edgequake
+EDGEQUAKE_BRANCH ?= edgequake-main  # Use ?= to allow environment override
+EDGEQUAKE_API_DIR := $(EDGEQUAKE_REPO)
+EDGEQUAKE_WEBUI_DIR := $(EDGEQUAKE_GIT_REPO)/edgequake_webui
 EDGEQUAKE_REGISTRY := $(REGISTRY)/edgequake-images
 EDGEQUAKE_PLATFORMS := linux/amd64,linux/arm64
-EDGEQUAKE_VERSION := $(shell cd $(EDGEQUAKE_REPO) 2>/dev/null && git rev-parse --short HEAD || echo "unknown")
+EDGEQUAKE_VERSION := $(shell cd $(EDGEQUAKE_GIT_REPO) 2>/dev/null && git rev-parse --short HEAD || echo "unknown")
 
 .PHONY: edgequake-check edgequake-build edgequake-build-api edgequake-build-webui \
         edgequake-push edgequake-push-api edgequake-push-webui \
         edgequake-deploy edgequake-full edgequake-status edgequake-logs \
-        edgequake-help edgequake-clean docker-clean
+        edgequake-help edgequake-clean docker-clean \
+        edgequake-clean-cache edgequake-get-version edgequake-verify-version \
+        edgequake-deploy-branch edgequake-build-api-fast edgequake-build-webui-fast
 
 edgequake-help:
 	@echo "┌─────────────────────────────────────────────────────────────┐"
@@ -633,6 +680,17 @@ edgequake-help:
 	@echo "  make edgequake-deploy-latest  # Pull latest from $(EDGEQUAKE_BRANCH), build & deploy"
 	@echo "  make edgequake-full            # Build, push, and deploy everything"
 	@echo "  make edgequake-status          # Check deployment status"
+	@echo ""
+	@echo "🔧 SQLX QUERY CACHE:"
+	@echo "  make sqlx-prepare-auto         # Auto-generate cache (Docker-based)"
+	@echo "  make sqlx-prepare-manual       # Manual cache generation (requires DATABASE_URL)"
+	@echo "  make sqlx-db-start             # Start PostgreSQL container"
+	@echo "  make sqlx-db-stop              # Stop PostgreSQL container"
+	@echo ""
+	@echo "🧹 CACHE & VERSION:"
+	@echo "  make edgequake-clean-cache     # Clean Docker build cache"
+	@echo "  make edgequake-get-version     # Get version from Cargo.toml"
+	@echo "  make edgequake-verify-version  # Verify deployed version matches Cargo.toml"
 	@echo ""
 	@echo "🏗️  BUILD (Multi-arch: amd64 + arm64):"
 	@echo "  make edgequake-build           # Build both API and WebUI images"
@@ -645,6 +703,7 @@ edgequake-help:
 	@echo "  make edgequake-push-webui      # Push WebUI image only"
 	@echo ""
 	@echo "🚢 DEPLOY:"
+	@echo "  make edgequake-deploy-branch BRANCH=<name>  # Deploy specific branch (auto-cleans cache + verifies version)"
 	@echo "  make edgequake-deploy-latest   # Deploy latest from $(EDGEQUAKE_BRANCH)"
 	@echo "  make edgequake-deploy          # Deploy to Cloud Run via Terraform"
 	@echo "  make edgequake-redeploy        # Force redeploy latest images & route traffic"
@@ -686,7 +745,7 @@ edgequake-check:
 	@echo "   WebUI:  $(EDGEQUAKE_WEBUI_DIR)"
 	@echo ""
 	@echo "📥 Pulling latest changes from $(EDGEQUAKE_BRANCH)..."
-	@cd $(EDGEQUAKE_REPO) && \
+	@cd $(EDGEQUAKE_GIT_REPO) && \
 		git fetch origin $(EDGEQUAKE_BRANCH) && \
 		git checkout $(EDGEQUAKE_BRANCH) && \
 		git pull origin $(EDGEQUAKE_BRANCH) && \
@@ -701,16 +760,22 @@ edgequake-build-api-fast: edgequake-check
 	@echo "🏗️  Building EdgeQuake API (linux/amd64 for Cloud Run)..."
 	@echo "   Source:    $(shell dirname $(EDGEQUAKE_REPO))"
 	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
-	@echo ""
-	@VERSION=$$(cd $(EDGEQUAKE_REPO) && git rev-parse --short HEAD); \
+	@CARGO_VERSION=$$(make -s edgequake-get-version); \
+	echo "   Version:   $$CARGO_VERSION"; \
+	echo ""
+	@VERSION=$$(cd $(EDGEQUAKE_GIT_REPO) && git rev-parse --short HEAD); \
+	CARGO_VERSION=$$(make -s edgequake-get-version); \
 	docker buildx build \
 		--platform linux/amd64 \
 		--provenance=false \
 		--sbom=false \
+		--pull \
 		--build-arg BUILD_VERSION=$$VERSION \
+		--build-arg CARGO_VERSION=$$CARGO_VERSION \
 		-f dockerfiles/Dockerfile.edgequake-api-simple \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$$VERSION \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:v$$CARGO_VERSION \
 		--push \
 		$(shell dirname $(EDGEQUAKE_REPO))
 	@echo ""
@@ -725,18 +790,21 @@ edgequake-build-webui-fast: edgequake-check
 	@echo ""
 	@# Get the Rust API URL from Terraform output if available
 	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_url 2>/dev/null || echo "https://edgequake-api-wszhkynzxa-uc.a.run.app"); \
-	VERSION=$$(cd $(EDGEQUAKE_REPO) && git rev-parse --short HEAD); \
+	VERSION=$$(cd $(EDGEQUAKE_GIT_REPO) && git rev-parse --short HEAD); \
+	CARGO_VERSION=$$(make -s edgequake-get-version); \
 	echo "   API URL: $$RUST_API_URL"; \
 	echo "   Version: $$VERSION"; \
 	docker buildx build \
 		--platform linux/amd64 \
 		--provenance=false \
 		--sbom=false \
+		--pull \
 		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
 		--build-arg BUILD_VERSION=$$VERSION \
 		-f dockerfiles/Dockerfile.edgequake-webui \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$$VERSION \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:v$$CARGO_VERSION \
 		--push \
 		$(EDGEQUAKE_WEBUI_DIR)
 	@echo ""
@@ -862,12 +930,13 @@ edgequake-redeploy: check-openai-key
 	@gcloud run services describe edgequake-api --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • API:    {}"
 	@gcloud run services describe edgequake-webui --region=$(REGION) --project=$(PROJECT_ID) --format='value(status.url)' | xargs -I {} echo "  • WebUI:  {}"
 
-edgequake-full: check-openai-key edgequake-build edgequake-deploy edgequake-status
+edgequake-full: sqlx-prepare-auto check-openai-key edgequake-build edgequake-deploy edgequake-status
 	@echo "┌─────────────────────────────────────────────────────────────┐"
 	@echo "│         🎉 EdgeQuake Deployment Complete!                    │"
 	@echo "└─────────────────────────────────────────────────────────────┘"
 	@echo ""
 	@echo "📋 Deployment Summary:"
+	@echo "   • SQLx query cache: Generated"
 	@echo "   • Docker images: Built and pushed"
 	@echo "   • OpenAI API key: Updated"
 	@echo "   • Services: Deployed via Terraform"
@@ -991,3 +1060,113 @@ clean-al clea:
 
 # Prevent make from trying to interpret commands as recipes
 .SECONDARY:
+
+# ============================================
+# 🔧 SQLx Query Cache Automation with Docker
+# ============================================
+# Automatically prepares SQLx query cache using a temporary PostgreSQL
+# container with AGE and pgvector extensions
+
+SQLX_CONTAINER_NAME := sqlx-prepare-postgres
+SQLX_DB_PORT := 54321
+SQLX_DB_USER := postgres
+SQLX_DB_PASSWORD := postgres
+SQLX_DB_NAME := edgequake_dev
+SQLX_DATABASE_URL := postgres://$(SQLX_DB_USER):$(SQLX_DB_PASSWORD)@localhost:$(SQLX_DB_PORT)/$(SQLX_DB_NAME)
+
+.PHONY: sqlx-prepare-auto sqlx-db-start sqlx-db-stop sqlx-db-clean sqlx-prepare-manual
+
+# Start temporary PostgreSQL container with AGE and pgvector
+sqlx-db-start:
+	@echo "🐳 Starting temporary PostgreSQL container with pgvector..."
+	@docker rm -f $(SQLX_CONTAINER_NAME) 2>/dev/null || true
+	@docker run -d \
+		--name $(SQLX_CONTAINER_NAME) \
+		-e POSTGRES_PASSWORD=$(SQLX_DB_PASSWORD) \
+		-e POSTGRES_DB=$(SQLX_DB_NAME) \
+		-p $(SQLX_DB_PORT):5432 \
+		pgvector/pgvector:pg16
+	@echo "⏳ Waiting for PostgreSQL to be ready..."
+	@for i in $$(seq 1 30); do \
+		if docker exec $(SQLX_CONTAINER_NAME) pg_isready -U $(SQLX_DB_USER) >/dev/null 2>&1; then \
+			echo "✅ PostgreSQL is ready"; \
+			break; \
+		fi; \
+		if [ $$i -eq 30 ]; then \
+			echo "❌ PostgreSQL failed to start"; \
+			docker logs $(SQLX_CONTAINER_NAME); \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+	@echo "🔧 Enabling pgvector extension..."
+	@docker exec $(SQLX_CONTAINER_NAME) psql -U $(SQLX_DB_USER) -d $(SQLX_DB_NAME) -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+	@echo "📋 Applying database migrations..."
+	@if [ -d "$(EDGEQUAKE_REPO)/migrations" ]; then \
+		for migration in $(EDGEQUAKE_REPO)/migrations/*.sql; do \
+			if [ -f "$$migration" ]; then \
+				echo "   Applying $$(basename $$migration)..."; \
+				docker exec -i $(SQLX_CONTAINER_NAME) psql -U $(SQLX_DB_USER) -d $(SQLX_DB_NAME) < "$$migration" 2>&1 | grep -v "^NOTICE:" || true; \
+			fi; \
+		done; \
+		echo "✅ All migrations applied"; \
+	else \
+		echo "⚠️  No migrations directory found at $(EDGEQUAKE_REPO)/migrations"; \
+	fi
+	@echo "✅ Database ready with pgvector extension and schema"
+
+# Stop temporary PostgreSQL container
+sqlx-db-stop:
+	@echo "🛑 Stopping temporary PostgreSQL container..."
+	@docker rm -f $(SQLX_CONTAINER_NAME) 2>/dev/null || true
+	@echo "✅ Container stopped and removed"
+
+# Clean up SQLx database resources
+sqlx-db-clean: sqlx-db-stop
+	@echo "✅ SQLx database cleanup complete"
+
+# Manual SQLx prepare (requires DATABASE_URL to be set)
+sqlx-prepare-manual:
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "❌ ERROR: DATABASE_URL is not set"; \
+		echo "💡 Use 'make sqlx-prepare-auto' for automatic setup"; \
+		exit 1; \
+	fi
+	@if ! command -v cargo-sqlx >/dev/null 2>&1; then \
+		echo "📦 Installing sqlx-cli..."; \
+		cargo install sqlx-cli --no-default-features --features postgres,native-tls; \
+	fi
+	@echo "🔧 Running cargo sqlx prepare..."
+	@DATABASE_URL="$$DATABASE_URL" cargo sqlx prepare --workspace -- --all-features
+	@echo "✅ SQLx query cache generated"
+
+# Automated SQLx prepare with temporary Docker database
+sqlx-prepare-auto: sqlx-db-start
+	@echo "┌─────────────────────────────────────────────────────────────┐"
+	@echo "│          🔧 Automated SQLx Query Cache Generation           │"
+	@echo "└─────────────────────────────────────────────────────────────┘"
+	@echo ""
+	@if ! command -v cargo-sqlx >/dev/null 2>&1; then \
+		echo "📦 Installing sqlx-cli..."; \
+		cargo install sqlx-cli --no-default-features --features postgres,native-tls; \
+	fi
+	@echo "🔍 Checking EdgeQuake repository..."
+	@if [ ! -d "$(EDGEQUAKE_REPO)" ]; then \
+		echo "❌ EdgeQuake repository not found: $(EDGEQUAKE_REPO)"; \
+		echo "💡 Update EDGEQUAKE_REPO in Makefile"; \
+		make sqlx-db-stop; \
+		exit 1; \
+	fi
+	@echo "🔧 Running cargo sqlx prepare in EdgeQuake repository..."
+	@cd $(EDGEQUAKE_REPO) && \
+		DATABASE_URL="$(SQLX_DATABASE_URL)" \
+		cargo sqlx prepare --workspace -- --all-features || \
+		(echo "❌ SQLx prepare failed"; make -C $(CURDIR) sqlx-db-stop; exit 1)
+	@make sqlx-db-stop
+	@echo ""
+	@echo "✅ SQLx query cache generated successfully"
+	@echo "💡 Remember to commit the .sqlx directory in $(EDGEQUAKE_REPO)"
+	@echo ""
+
+# Alias for convenience
+sqlx-prepare: sqlx-prepare-auto

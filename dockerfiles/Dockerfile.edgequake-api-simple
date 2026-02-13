@@ -1,6 +1,6 @@
 # EdgeQuake API Dockerfile - Simplified build without cargo-chef
 # Multi-stage build for production-optimized Rust application with PostgreSQL support
-# Build context should be /Users/raphaelmansuy/Github/03-working (parent of both edgequake/ and lopdf/)
+# Build context should be /Users/raphaelmansuy/Github/03-working (parent of edgequake/)
 
 # ============================================
 # Stage 1: Builder - Build application
@@ -16,21 +16,30 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy both edgequake and lopdf directories
+# Copy edgequake directory
 COPY edgequake ./edgequake
-COPY lopdf ./edgequake/lopdf
 
 # Change to edgequake directory for build
 WORKDIR /workspace/edgequake/edgequake
 
+# Debug: Show directory structure
+RUN echo "Current directory:" && pwd && echo "Contents:" && ls -la && echo "Cargo.toml check:" && cat Cargo.toml | head -20
+
 # Remove invalid benchmark references to avoid build errors
 RUN sed -i '/\[\[bench\]\]/,/^$/d' Cargo.toml || true
 
-# Build the application
-RUN cargo build --release
+# Build the application (explicitly specify binary)
+RUN cargo build --release --bin edgequake
 
-# Strip the binary to reduce size
-RUN strip target/release/edgequake || true
+# Debug: Find where the binary was built
+RUN echo "=== Searching for edgequake binary ===" && \
+    find /workspace -name "edgequake" -type f -executable 2>/dev/null || echo "Binary not found" && \
+    echo "=== Contents of /workspace/edgequake/ ===" && ls -la /workspace/edgequake/ && \
+    echo "=== Contents of current dir target/ ===" && ls -la target/ 2>/dev/null || echo "No target in current dir"
+
+# Strip the binary to reduce size (using found location)
+RUN BINARY_PATH=$(find /workspace -name "edgequake" -type f -executable 2>/dev/null | head -1) && \
+    if [ -n "$BINARY_PATH" ]; then strip "$BINARY_PATH" || true; echo "Stripped: $BINARY_PATH"; fi
 
 # ============================================
 # Stage 2: Runtime - Minimal runtime image
@@ -48,8 +57,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -s /bin/false -u 1001 edgequake
 
-# Copy binary from builder (note: binary is in /workspace/edgequake/edgequake/target/release/)
-COPY --from=builder /workspace/edgequake/edgequake/target/release/edgequake /app/edgequake
+# Copy binary from builder (note: binary is at workspace root target/)
+COPY --from=builder /workspace/edgequake/target/release/edgequake /app/edgequake
 
 # Change ownership
 RUN chown -R edgequake:edgequake /app

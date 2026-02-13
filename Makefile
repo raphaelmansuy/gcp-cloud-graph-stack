@@ -598,6 +598,17 @@ db-chec:
 # ============================================
 # EdgeQuake Deployment Targets
 # ============================================
+edgequake-deploy-branch:
+	@if [ -z "$(BRANCH)" ]; then \
+		echo "❌ Please specify the branch: make edgequake-deploy-branch BRANCH=<branch-name>"; \
+		exit 1; \
+	else \
+		echo "┌─────────────────────────────────────────────────────────────┐"; \
+		echo "│   🚀 Build & Deploy EdgeQuake branch: $(BRANCH)              │"; \
+		echo "└─────────────────────────────────────────────────────────────┘"; \
+		echo ""; \
+		EDGEQUAKE_BRANCH=$(BRANCH) ./scripts/deploy-edgequake-latest.sh; \
+	fi
 
 # EdgeQuake repository location (adjust if needed)
 EDGEQUAKE_REPO := /Users/raphaelmansuy/Github/03-working/edgequake

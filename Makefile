@@ -6,6 +6,10 @@ PROJECT_ID := saas-app-001
 REGION := us-central1
 REGISTRY := ${REGION}-docker.pkg.dev/${PROJECT_ID}
 TF_DIR := terraform
+# Default OpenAI model & embedding for deployments (override via env or make args)
+# Example: make EDGEQUAKE_OPENAI_MODEL=gpt-4o-mini EDGEQUAKE_OPENAI_EMBEDDING=text-embedding-3-small edgequake-redeploy
+EDGEQUAKE_OPENAI_MODEL ?= gpt-4o-mini
+EDGEQUAKE_OPENAI_EMBEDDING ?= text-embedding-3-small
 
 # ============================================
 # ⚠️  CRITICAL: OPENAI API KEY CONFIGURATION
@@ -620,7 +624,11 @@ edgequake-get-version:
 .PHONY: edgequake-verify-version
 edgequake-verify-version:
 	@echo "🔍 Verifying deployed version..."
-	@EXPECTED_VERSION=$$(make -s edgequake-get-version); \
+	@# Prefer user-specified target version, otherwise read from Cargo.toml
+	@EXPECTED_VERSION=$${EXPECTED_VERSION:-$(EDGEQUAKE_TARGET_VERSION)}; \
+	if [ -z "$$EXPECTED_VERSION" ] || [ "$$EXPECTED_VERSION" = "unknown" ]; then \
+		EXPECTED_VERSION=$$(make -s edgequake-get-version); \
+	fi; \
 	API_URL=$$(gcloud run services describe edgequake-api --region=$(REGION) --format='value(status.url)' 2>/dev/null); \
 	if [ -z "$$API_URL" ]; then \
 		echo "⚠️  Cannot verify: API service not found"; \
@@ -654,6 +662,20 @@ edgequake-deploy-branch: edgequake-clean-cache sqlx-prepare-auto
 		make edgequake-verify-version; \
 	fi
 
+# Release target: Build and deploy a specific EdgeQuake version (default: $(EDGEQUAKE_TARGET_VERSION)).
+.PHONY: edgequake-release
+edgequake-release:
+	@VERSION=$${VERSION:-$(EDGEQUAKE_TARGET_VERSION)}; \
+	IMAGE_TAG=v$$VERSION; \
+	echo "┌─────────────────────────────────────────────────────────────┐"; \
+	echo "│   🚀 Releasing EdgeQuake version: $$VERSION                    │"; \
+	echo "└─────────────────────────────────────────────────────────────┘"; \
+	# Ensure repo up-to-date, prepare SQLx cache, build with explicit tag, and deploy
+	make EDGEQUAKE_TARGET_VERSION=$$VERSION EDGEQUAKE_IMAGE_TAG=$$IMAGE_TAG edgequake-clean-cache sqlx-prepare-auto edgequake-build && \
+	cd terraform && terraform plan -var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:$$IMAGE_TAG" -var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:$$IMAGE_TAG" -var="openai_api_key=$$TF_VAR_openai_api_key" -var="openai_model=$(EDGEQUAKE_OPENAI_MODEL)" -var="openai_embedding=$(EDGEQUAKE_OPENAI_EMBEDDING)" -out=tfplan-edgequake && terraform apply tfplan-edgequake && \
+	cd $(CURDIR) && make EDGEQUAKE_TARGET_VERSION=$$VERSION EDGEQUAKE_IMAGE_TAG=$$IMAGE_TAG edgequake-verify-version || (echo "❌ Release failed"; exit 1); \
+	echo ""
+
 # EdgeQuake repository location (adjust if needed)
 EDGEQUAKE_GIT_REPO := /Users/raphaelmansuy/Github/03-working/edgequake
 EDGEQUAKE_REPO := $(EDGEQUAKE_GIT_REPO)/edgequake
@@ -662,7 +684,13 @@ EDGEQUAKE_API_DIR := $(EDGEQUAKE_REPO)
 EDGEQUAKE_WEBUI_DIR := $(EDGEQUAKE_GIT_REPO)/edgequake_webui
 EDGEQUAKE_REGISTRY := $(REGISTRY)/edgequake-images
 EDGEQUAKE_PLATFORMS := linux/amd64,linux/arm64
-EDGEQUAKE_VERSION := $(shell cd $(EDGEQUAKE_GIT_REPO) 2>/dev/null && git rev-parse --short HEAD || echo "unknown")
+# Default image/version configuration. Override by passing VERSION or EDGEQUAKE_IMAGE_TAG
+# Example: make edgequake-release VERSION=0.4.0
+EDGEQUAKE_TARGET_VERSION ?= 0.4.0
+EDGEQUAKE_IMAGE_TAG ?= v$(EDGEQUAKE_TARGET_VERSION)
+# Fallback git short commit for tagging/debugging (still available for extra tags)
+EDGEQUAKE_COMMIT_SHORT := $(shell cd $(EDGEQUAKE_GIT_REPO) 2>/dev/null && git rev-parse --short HEAD || echo "local")
+EDGEQUAKE_VERSION := $(EDGEQUAKE_COMMIT_SHORT)
 
 .PHONY: edgequake-check edgequake-build edgequake-build-api edgequake-build-webui \
         edgequake-push edgequake-push-api edgequake-push-webui \
@@ -762,9 +790,10 @@ edgequake-build-api-fast: edgequake-check
 	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
 	@CARGO_VERSION=$$(make -s edgequake-get-version); \
 	echo "   Version:   $$CARGO_VERSION"; \
-	echo ""
+	echo ""; \
 	@VERSION=$$(cd $(EDGEQUAKE_GIT_REPO) && git rev-parse --short HEAD); \
 	CARGO_VERSION=$$(make -s edgequake-get-version); \
+	IMAGE_TAG=$${IMAGE_TAG:-$(EDGEQUAKE_IMAGE_TAG)}; \
 	docker buildx build \
 		--platform linux/amd64 \
 		--provenance=false \
@@ -776,6 +805,7 @@ edgequake-build-api-fast: edgequake-check
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$$VERSION \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:v$$CARGO_VERSION \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$$IMAGE_TAG \
 		--push \
 		$(shell dirname $(EDGEQUAKE_REPO))
 	@echo ""
@@ -805,6 +835,7 @@ edgequake-build-webui-fast: edgequake-check
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$$VERSION \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:v$$CARGO_VERSION \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$$IMAGE_TAG \
 		--push \
 		$(EDGEQUAKE_WEBUI_DIR)
 	@echo ""
@@ -818,11 +849,13 @@ edgequake-build-api: edgequake-check
 	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
 	@echo "   Platforms: $(EDGEQUAKE_PLATFORMS)"
 	@echo ""
+	IMAGE_TAG=$${EDGEQUAKE_IMAGE_TAG:-v$(EDGEQUAKE_TARGET_VERSION)}; \
 	docker buildx build \
 		--platform $(EDGEQUAKE_PLATFORMS) \
 		-f dockerfiles/Dockerfile.edgequake-api \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$(shell git -C $(EDGEQUAKE_API_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-api:$$IMAGE_TAG \
 		--push \
 		$(EDGEQUAKE_API_DIR)
 	@echo ""
@@ -839,12 +872,14 @@ edgequake-build-webui: edgequake-check
 	@# Get the Rust API URL from Terraform output if available
 	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_url 2>/dev/null || echo "https://edgequake-api-wszhkynzxa-uc.a.run.app"); \
 	echo "   API URL: $$RUST_API_URL"; \
+	IMAGE_TAG=$${EDGEQUAKE_IMAGE_TAG:-v$(EDGEQUAKE_TARGET_VERSION)}; \
 	docker buildx build \
 		--platform $(EDGEQUAKE_PLATFORMS) \
 		-f dockerfiles/Dockerfile.edgequake-webui \
 		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(shell git -C $(EDGEQUAKE_WEBUI_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
+		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$$IMAGE_TAG \
 		--push \
 		$(EDGEQUAKE_WEBUI_DIR)
 	@echo ""
@@ -870,8 +905,8 @@ edgequake-push: edgequake-build
 	@echo "✅ All EdgeQuake images are already pushed"
 	@echo ""
 	@echo "📋 Image URLs:"
-	@echo "   API:   $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
-	@echo "   WebUI: $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest"
+	@echo "   API:   $(EDGEQUAKE_REGISTRY)/edgequake-api:$(EDGEQUAKE_IMAGE_TAG)"
+	@echo "   WebUI: $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(EDGEQUAKE_IMAGE_TAG)"
 	@echo ""
 
 # Deploy latest version from edgequake-main branch
@@ -890,8 +925,10 @@ edgequake-deploy: check-openai-key
 	@# Update terraform variables with image URLs and OpenAI API key
 	@cd terraform && \
 	terraform plan \
-		-var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:latest" \
-		-var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:latest" \
+		-var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:$(EDGEQUAKE_IMAGE_TAG)" \
+		-var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:$(EDGEQUAKE_IMAGE_TAG)" \
+		-var="openai_model=$(EDGEQUAKE_OPENAI_MODEL)" \
+		-var="openai_embedding=$(EDGEQUAKE_OPENAI_EMBEDDING)" \
 		-var="rust_api_service_name=edgequake-api" \
 		-var="nextjs_service_name=edgequake-webui" \
 		-var="openai_api_key=$$TF_VAR_openai_api_key" \
@@ -909,19 +946,20 @@ edgequake-redeploy: check-openai-key
 	@echo ""
 	@echo "✅ OpenAI API key validated"
 	@echo ""
-	@echo "📦 Deploying latest API image..."
+	@echo "📦 Deploying API image $(EDGEQUAKE_IMAGE_TAG)..."
 	@gcloud run deploy edgequake-api \
-		--image $(EDGEQUAKE_REGISTRY)/edgequake-api:latest \
+		--image $(EDGEQUAKE_REGISTRY)/edgequake-api:$(EDGEQUAKE_IMAGE_TAG) \
 		--region=$(REGION) \
 		--project=$(PROJECT_ID) \
-		--update-env-vars=OPENAI_API_KEY=$$TF_VAR_openai_api_key \
+		--update-env-vars=OPENAI_API_KEY=$$TF_VAR_openai_api_key,OPENAI_MODEL=$(EDGEQUAKE_OPENAI_MODEL),OPENAI_EMBEDDING=$(EDGEQUAKE_OPENAI_EMBEDDING) \
 		--quiet
 	@echo ""
-	@echo "📦 Deploying latest WebUI image..."
+	@echo "📦 Deploying WebUI image $(EDGEQUAKE_IMAGE_TAG)..."
 	@gcloud run deploy edgequake-webui \
-		--image $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
+		--image $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(EDGEQUAKE_IMAGE_TAG) \
 		--region=$(REGION) \
 		--project=$(PROJECT_ID) \
+		--update-env-vars=OPENAI_MODEL=$(EDGEQUAKE_OPENAI_MODEL),OPENAI_EMBEDDING=$(EDGEQUAKE_OPENAI_EMBEDDING) \
 		--quiet
 	@echo ""
 	@echo "✅ Latest images deployed and traffic routed!"
@@ -1100,7 +1138,10 @@ sqlx-db-start:
 		sleep 1; \
 	done
 	@echo "🔧 Enabling pgvector extension..."
-	@docker exec $(SQLX_CONTAINER_NAME) psql -U $(SQLX_DB_USER) -d $(SQLX_DB_NAME) -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+	@echo "🔧 Ensuring temporary database exists and enabling pgvector extension..."
+	@docker exec $(SQLX_CONTAINER_NAME) psql -U $(SQLX_DB_USER) -tAc "SELECT 1 FROM pg_database WHERE datname='$(SQLX_DB_NAME)'" | grep -q 1 || \
+		docker exec $(SQLX_CONTAINER_NAME) psql -U $(SQLX_DB_USER) -c "CREATE DATABASE $(SQLX_DB_NAME)"
+	@docker exec $(SQLX_CONTAINER_NAME) psql -U $(SQLX_DB_USER) -d $(SQLX_DB_NAME) -c "CREATE EXTENSION IF NOT EXISTS vector;"
 	@echo "📋 Applying database migrations..."
 	@if [ -d "$(EDGEQUAKE_REPO)/migrations" ]; then \
 		for migration in $(EDGEQUAKE_REPO)/migrations/*.sql; do \

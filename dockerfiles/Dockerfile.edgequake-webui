@@ -35,6 +35,7 @@ RUN npm install -g pnpm@10.13.1
 
 # Build arguments for environment variables (before COPY to invalidate cache)
 ARG NEXT_PUBLIC_API_URL=/api/v1
+ARG NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_URL}
 ARG NODE_ENV=production
 ARG BUILD_VERSION=unknown
 
@@ -46,6 +47,7 @@ COPY . .
 
 # Set environment variables for build
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NODE_ENV=${NODE_ENV}
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_VERSION=${BUILD_VERSION}

@@ -55,13 +55,19 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd -r -s /bin/false -u 1001 edgequake
+    && useradd -r -s /bin/false -u 1001 -d /home/edgequake edgequake
 
 # Copy binary from builder (note: binary is at workspace root target/)
 COPY --from=builder /workspace/edgequake/target/release/edgequake /app/edgequake
 
-# Change ownership
-RUN chown -R edgequake:edgequake /app
+# Create writable cache directory for PDFium bundled library extraction
+# pdfium-auto extracts the embedded PDFium .so to PDFIUM_AUTO_CACHE_DIR at runtime
+RUN mkdir -p /app/.cache/pdfium && chown -R edgequake:edgequake /app
+
+# Set environment for PDFium cache and tmp (Cloud Run containers have limited writable paths)
+ENV PDFIUM_AUTO_CACHE_DIR=/app/.cache/pdfium
+ENV HOME=/app
+ENV TMPDIR=/tmp
 
 # Switch to non-root user
 USER edgequake

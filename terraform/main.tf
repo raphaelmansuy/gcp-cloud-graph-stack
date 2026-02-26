@@ -112,6 +112,14 @@ module "cloud_run_rust_api" {
     "RUST_LOG"       = "info,edgequake=debug"
     "OPENAI_API_KEY" = var.openai_api_key
     "ENVIRONMENT"    = "production" # Match working revision
+    # Model defaults: gpt-4o-mini for LLM & vision, text-embedding-3-small for embeddings
+    "EDGEQUAKE_DEFAULT_LLM_MODEL"            = "gpt-4o-mini"
+    "EDGEQUAKE_DEFAULT_LLM_PROVIDER"         = "openai"
+    "EDGEQUAKE_DEFAULT_EMBEDDING_MODEL"      = "text-embedding-3-small"
+    "EDGEQUAKE_DEFAULT_EMBEDDING_PROVIDER"   = "openai"
+    "EDGEQUAKE_DEFAULT_EMBEDDING_DIMENSION"  = "1536"
+    "EDGEQUAKE_VISION_MODEL"                 = "gpt-4o-mini"
+    "EDGEQUAKE_VISION_PROVIDER"              = "openai"
   }
   service_account_name = google_service_account.cloud_run_sa.email
 

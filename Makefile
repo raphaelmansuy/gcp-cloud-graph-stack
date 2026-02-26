@@ -6,10 +6,12 @@ PROJECT_ID := saas-app-001
 REGION := us-central1
 REGISTRY := ${REGION}-docker.pkg.dev/${PROJECT_ID}
 TF_DIR := terraform
-# Default OpenAI model & embedding for deployments (override via env or make args)
+# Default OpenAI model, vision model & embedding for deployments (override via env or make args)
 # Example: make EDGEQUAKE_OPENAI_MODEL=gpt-4o-mini EDGEQUAKE_OPENAI_EMBEDDING=text-embedding-3-small edgequake-redeploy
 EDGEQUAKE_OPENAI_MODEL ?= gpt-4o-mini
+EDGEQUAKE_OPENAI_VISION_MODEL ?= gpt-4o-mini
 EDGEQUAKE_OPENAI_EMBEDDING ?= text-embedding-3-small
+EDGEQUAKE_OPENAI_EMBEDDING_DIMENSION ?= 1536
 
 # ============================================
 # ⚠️  CRITICAL: OPENAI API KEY CONFIGURATION
@@ -672,7 +674,12 @@ edgequake-release:
 	echo "└─────────────────────────────────────────────────────────────┘"; \
 	# Ensure repo up-to-date, prepare SQLx cache, build with explicit tag, and deploy
 	make EDGEQUAKE_TARGET_VERSION=$$VERSION EDGEQUAKE_IMAGE_TAG=$$IMAGE_TAG edgequake-clean-cache sqlx-prepare-auto edgequake-build && \
-	cd terraform && terraform plan -var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:$$IMAGE_TAG" -var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:$$IMAGE_TAG" -var="openai_api_key=$$TF_VAR_openai_api_key" -var="openai_model=$(EDGEQUAKE_OPENAI_MODEL)" -var="openai_embedding=$(EDGEQUAKE_OPENAI_EMBEDDING)" -out=tfplan-edgequake && terraform apply tfplan-edgequake && \
+	cd terraform && \
+	TF_VARS_EXTRA=""; \
+	if grep -R --line-number -E "variable\s+\"openai_model\"|variable\s+\"openai_embedding\"" . >/dev/null 2>&1; then \
+		TF_VARS_EXTRA="-var=\"openai_model=$(EDGEQUAKE_OPENAI_MODEL)\" -var=\"openai_embedding=$(EDGEQUAKE_OPENAI_EMBEDDING)\""; \
+	fi; \
+	terraform plan $$TF_VARS_EXTRA -var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:$$IMAGE_TAG" -var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:$$IMAGE_TAG" -var="openai_api_key=$$TF_VAR_openai_api_key" -out=tfplan-edgequake && terraform apply tfplan-edgequake && \
 	cd $(CURDIR) && make EDGEQUAKE_TARGET_VERSION=$$VERSION EDGEQUAKE_IMAGE_TAG=$$IMAGE_TAG edgequake-verify-version || (echo "❌ Release failed"; exit 1); \
 	echo ""
 
@@ -788,12 +795,11 @@ edgequake-build-api-fast: edgequake-check
 	@echo "🏗️  Building EdgeQuake API (linux/amd64 for Cloud Run)..."
 	@echo "   Source:    $(shell dirname $(EDGEQUAKE_REPO))"
 	@echo "   Image:     $(EDGEQUAKE_REGISTRY)/edgequake-api:latest"
-	@CARGO_VERSION=$$(make -s edgequake-get-version); \
-	echo "   Version:   $$CARGO_VERSION"; \
-	echo ""; \
 	@VERSION=$$(cd $(EDGEQUAKE_GIT_REPO) && git rev-parse --short HEAD); \
 	CARGO_VERSION=$$(make -s edgequake-get-version); \
 	IMAGE_TAG=$${IMAGE_TAG:-$(EDGEQUAKE_IMAGE_TAG)}; \
+	echo "   Version:   $$CARGO_VERSION"; \
+	echo ""; \
 	docker buildx build \
 		--platform linux/amd64 \
 		--provenance=false \
@@ -822,6 +828,7 @@ edgequake-build-webui-fast: edgequake-check
 	@RUST_API_URL=$$(cd terraform && terraform output -raw rust_api_service_url 2>/dev/null || echo "https://edgequake-api-wszhkynzxa-uc.a.run.app"); \
 	VERSION=$$(cd $(EDGEQUAKE_GIT_REPO) && git rev-parse --short HEAD); \
 	CARGO_VERSION=$$(make -s edgequake-get-version); \
+	IMAGE_TAG=$${IMAGE_TAG:-$(EDGEQUAKE_IMAGE_TAG)}; \
 	echo "   API URL: $$RUST_API_URL"; \
 	echo "   Version: $$VERSION"; \
 	docker buildx build \
@@ -830,6 +837,7 @@ edgequake-build-webui-fast: edgequake-check
 		--sbom=false \
 		--pull \
 		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
+		--build-arg NEXT_PUBLIC_API_BASE_URL=$$RUST_API_URL \
 		--build-arg BUILD_VERSION=$$VERSION \
 		-f dockerfiles/Dockerfile.edgequake-webui \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
@@ -877,6 +885,7 @@ edgequake-build-webui: edgequake-check
 		--platform $(EDGEQUAKE_PLATFORMS) \
 		-f dockerfiles/Dockerfile.edgequake-webui \
 		--build-arg NEXT_PUBLIC_API_URL=$$RUST_API_URL \
+		--build-arg NEXT_PUBLIC_API_BASE_URL=$$RUST_API_URL \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:latest \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(shell git -C $(EDGEQUAKE_WEBUI_DIR) rev-parse --short HEAD 2>/dev/null || echo "local") \
 		-t $(EDGEQUAKE_REGISTRY)/edgequake-webui:$$IMAGE_TAG \
@@ -924,11 +933,13 @@ edgequake-deploy: check-openai-key
 	@echo ""
 	@# Update terraform variables with image URLs and OpenAI API key
 	@cd terraform && \
-	terraform plan \
+	TF_VARS_EXTRA=""; \
+	if grep -R --line-number -E "variable\s+\"openai_model\"|variable\s+\"openai_embedding\"" . >/dev/null 2>&1; then \
+		TF_VARS_EXTRA="-var=\"openai_model=$(EDGEQUAKE_OPENAI_MODEL)\" -var=\"openai_embedding=$(EDGEQUAKE_OPENAI_EMBEDDING)\""; \
+	fi; \
+	terraform plan $$TF_VARS_EXTRA \
 		-var="rust_api_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-api:$(EDGEQUAKE_IMAGE_TAG)" \
 		-var="nextjs_image_url=$(EDGEQUAKE_REGISTRY)/edgequake-webui:$(EDGEQUAKE_IMAGE_TAG)" \
-		-var="openai_model=$(EDGEQUAKE_OPENAI_MODEL)" \
-		-var="openai_embedding=$(EDGEQUAKE_OPENAI_EMBEDDING)" \
 		-var="rust_api_service_name=edgequake-api" \
 		-var="nextjs_service_name=edgequake-webui" \
 		-var="openai_api_key=$$TF_VAR_openai_api_key" \
@@ -951,7 +962,7 @@ edgequake-redeploy: check-openai-key
 		--image $(EDGEQUAKE_REGISTRY)/edgequake-api:$(EDGEQUAKE_IMAGE_TAG) \
 		--region=$(REGION) \
 		--project=$(PROJECT_ID) \
-		--update-env-vars=OPENAI_API_KEY=$$TF_VAR_openai_api_key,OPENAI_MODEL=$(EDGEQUAKE_OPENAI_MODEL),OPENAI_EMBEDDING=$(EDGEQUAKE_OPENAI_EMBEDDING) \
+		--update-env-vars=OPENAI_API_KEY=$$TF_VAR_openai_api_key,EDGEQUAKE_DEFAULT_LLM_MODEL=$(EDGEQUAKE_OPENAI_MODEL),EDGEQUAKE_DEFAULT_LLM_PROVIDER=openai,EDGEQUAKE_DEFAULT_EMBEDDING_MODEL=$(EDGEQUAKE_OPENAI_EMBEDDING),EDGEQUAKE_DEFAULT_EMBEDDING_PROVIDER=openai,EDGEQUAKE_DEFAULT_EMBEDDING_DIMENSION=$(EDGEQUAKE_OPENAI_EMBEDDING_DIMENSION),EDGEQUAKE_VISION_MODEL=$(EDGEQUAKE_OPENAI_VISION_MODEL),EDGEQUAKE_VISION_PROVIDER=openai \
 		--quiet
 	@echo ""
 	@echo "📦 Deploying WebUI image $(EDGEQUAKE_IMAGE_TAG)..."
@@ -959,7 +970,7 @@ edgequake-redeploy: check-openai-key
 		--image $(EDGEQUAKE_REGISTRY)/edgequake-webui:$(EDGEQUAKE_IMAGE_TAG) \
 		--region=$(REGION) \
 		--project=$(PROJECT_ID) \
-		--update-env-vars=OPENAI_MODEL=$(EDGEQUAKE_OPENAI_MODEL),OPENAI_EMBEDDING=$(EDGEQUAKE_OPENAI_EMBEDDING) \
+		--update-env-vars=EDGEQUAKE_DEFAULT_LLM_MODEL=$(EDGEQUAKE_OPENAI_MODEL),EDGEQUAKE_DEFAULT_EMBEDDING_MODEL=$(EDGEQUAKE_OPENAI_EMBEDDING) \
 		--quiet
 	@echo ""
 	@echo "✅ Latest images deployed and traffic routed!"
